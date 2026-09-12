@@ -134,17 +134,17 @@
     <h1 class="card-title">Initial System Setup</h1>
     <p class="card-subtitle">Create the initial primary OWNER account for the Outreach Control Center.</p>
 
-    <div id="alert-box" class="alert"></div>
+    <div id="alert-box" class="alert {% if error_message %}alert-error{% endif %}" {% if error_message %}style="display: block;"{% endif %}>{{ error_message or '' }}</div>
 
-    <form id="setup-form">
+    <form id="setup-form" action="/setup" method="POST">
       <div class="form-group">
         <label for="username">Owner Username</label>
-        <input type="text" id="username" name="username" required autofocus placeholder="e.g. admin">
+        <input type="text" id="username" name="username" value="{{ username or '' }}" required autofocus placeholder="e.g. admin">
       </div>
 
       <div class="form-group">
         <label for="email">Owner Email</label>
-        <input type="email" id="email" name="email" required placeholder="admin@integra-ist.com">
+        <input type="email" id="email" name="email" value="{{ email or '' }}" required placeholder="admin@integra-ist.com">
       </div>
 
       <div class="form-group">
@@ -180,57 +180,20 @@
     }
   }
 
-  document.getElementById('setup-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    _hideAlert('alert-box');
-
-    const username = document.getElementById('username').value.trim();
-    const email = document.getElementById('email').value.trim();
+  document.getElementById('setup-form').addEventListener('submit', function (e) {
     const password = document.getElementById('password').value;
     const confirmPassword = document.getElementById('confirm_password').value;
 
-    if (!username || !email || !password) {
-      _showAlert('alert-box', 'All fields are required.', 'error');
-      return;
-    }
-
     if (password !== confirmPassword) {
+      e.preventDefault();
       _showAlert('alert-box', 'Passwords do not match.', 'error');
-      return;
+      return false;
     }
 
     const btn = document.getElementById('submit-btn');
     btn.disabled = true;
     btn.textContent = 'Creating Account...';
-
-    try {
-      const resp = await fetch('/api/v1/setup/bootstrap', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({ username, email, password })
-      });
-      const data = await resp.json();
-
-      if (resp.ok && data.success) {
-        _showAlert('alert-box', 'Owner account created successfully! Redirecting to login...', 'success');
-        setTimeout(() => {
-          window.location.href = '/login';
-        }, 1200);
-      } else {
-        const detailText = data.error?.details ? ` - ${data.error.details}` : '';
-        const errorMsg = (data.error?.message || 'Failed to initialize system.') + detailText;
-        _showAlert('alert-box', errorMsg, 'error');
-        btn.disabled = false;
-        btn.textContent = 'Create OWNER Account';
-      }
-    } catch (err) {
-      _showAlert('alert-box', 'Network error. Please check your connection and try again.', 'error');
-      btn.disabled = false;
-      btn.textContent = 'Create OWNER Account';
-    }
+    // Form submits natively via POST to /setup
   });
 </script>
 {% endblock %}

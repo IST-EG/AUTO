@@ -4,7 +4,7 @@ HTML UI View routes for Web Control Center.
 
 from pathlib import Path
 from typing import Optional
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, Request, Response, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
@@ -57,6 +57,78 @@ def setup_page(
         name="setup.html",
         context={"current_user": current_user}
     )
+
+
+@router.post("/setup", response_class=HTMLResponse)
+def handle_setup_form(
+    request: Request,
+    username: str = Form(""),
+    email: str = Form(""),
+    password: str = Form(""),
+    confirm_password: str = Form(""),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_optional)
+):
+    """Handles standard HTML form POST submission for first-run OWNER bootstrap."""
+    if not BootstrapService.is_setup_available(db):
+        return RedirectResponse(url="/login", status_code=303)
+
+    norm_user = (username or "").strip().lower()
+    norm_email = (email or "").strip().lower()
+
+    if not norm_user or not norm_email or not password:
+        return templates.TemplateResponse(
+            request=request,
+            name="setup.html",
+            context={
+                "current_user": current_user,
+                "error_message": "All fields are required.",
+                "username": norm_user,
+                "email": norm_email
+            },
+            status_code=400
+        )
+
+    if password != confirm_password:
+        return templates.TemplateResponse(
+            request=request,
+            name="setup.html",
+            context={
+                "current_user": current_user,
+                "error_message": "Passwords do not match.",
+                "username": norm_user,
+                "email": norm_email
+            },
+            status_code=400
+        )
+
+    client_ip = request.client.host if request.client else "127.0.0.1"
+    try:
+        success, message, _ = BootstrapService.bootstrap_owner(
+            db=db,
+            username=norm_user,
+            email=norm_email,
+            password=password,
+            ip_address=client_ip
+        )
+    except Exception as exc:
+        success = False
+        message = f"Setup error: {str(exc)}"
+
+    if not success:
+        return templates.TemplateResponse(
+            request=request,
+            name="setup.html",
+            context={
+                "current_user": current_user,
+                "error_message": message,
+                "username": norm_user,
+                "email": norm_email
+            },
+            status_code=422
+        )
+
+    return RedirectResponse(url="/login", status_code=303)
 
 
 @router.get("/login", response_class=HTMLResponse)
