@@ -1,0 +1,352 @@
+{% extends "base.html" %}
+
+{% block title %}{{ campaign.name }} &bull; Integra Outreach Control Center{% endblock %}
+
+{% block content %}
+<div class="container" style="padding-top: 1.5rem; padding-bottom: 2.5rem;">
+
+  <!-- Breadcrumb -->
+  <div style="margin-bottom: 1rem;">
+    <a href="/campaigns" style="color: var(--text-secondary); text-decoration: none; font-size: 0.9rem;">&larr; Back to Campaigns</a>
+  </div>
+
+  <!-- Header & Status -->
+  <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+    <div>
+      <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <h1 style="font-size: 1.85rem; font-weight: 800;">{{ campaign.name }}</h1>
+        <span class="status-pill status-{{ campaign.status.lower() }}" id="campaign-status-pill">{{ campaign.status }}</span>
+      </div>
+      <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.25rem;">
+        Campaign ID: #{{ campaign.id }} &bull; Created {{ campaign.created_at.strftime('%Y-%m-%d %H:%M') }}
+      </p>
+    </div>
+
+    <!-- State Transition Action Buttons -->
+    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+      {% if campaign.status == 'DRAFT' %}
+        <button onclick="transitionCampaignStatus('RUNNING')" class="btn btn-success btn-sm" style="width: auto;">
+          Set to RUNNING
+        </button>
+        <button onclick="transitionCampaignStatus('CANCELLED')" class="btn btn-danger btn-sm" style="width: auto;">
+          Cancel Campaign
+        </button>
+      {% elif campaign.status == 'RUNNING' %}
+        <button onclick="transitionCampaignStatus('PAUSED')" class="btn btn-secondary btn-sm" style="width: auto;">
+          Pause Campaign
+        </button>
+        <button onclick="transitionCampaignStatus('COMPLETED')" class="btn btn-success btn-sm" style="width: auto;">
+          Mark Completed
+        </button>
+        <button onclick="transitionCampaignStatus('CANCELLED')" class="btn btn-danger btn-sm" style="width: auto;">
+          Cancel Campaign
+        </button>
+      {% elif campaign.status == 'PAUSED' %}
+        <button onclick="transitionCampaignStatus('RUNNING')" class="btn btn-success btn-sm" style="width: auto;">
+          Resume (RUNNING)
+        </button>
+        <button onclick="transitionCampaignStatus('CANCELLED')" class="btn btn-danger btn-sm" style="width: auto;">
+          Cancel Campaign
+        </button>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Banner for transition notice -->
+  <div class="card" style="padding: 0.75rem 1rem; margin-bottom: 1.5rem; border-left: 4px solid var(--accent); background-color: rgba(37, 99, 235, 0.08);">
+    <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0;">
+      <strong style="color: var(--text-primary);">Operational Note:</strong>
+      Transitioning campaign status to <code>RUNNING</code> is strictly a domain state transition. Execution is performed by the Production Runner daemon supervised via the <a href="/dashboard" style="color: var(--accent);">Dashboard</a>.
+    </p>
+  </div>
+
+  <div id="detail-alert" class="alert" style="display: none; margin-bottom: 1.5rem;"></div>
+
+  <!-- Grid: Parameters & Stats -->
+  <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
+    <!-- Message Template Snapshot -->
+    <div class="card">
+      <h2 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 0.75rem;">Message Template Snapshot</h2>
+      <div style="background-color: var(--bg-main); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; font-family: monospace; font-size: 0.9rem; white-space: pre-wrap; line-height: 1.6;">{{ campaign.message_template }}</div>
+      <div style="margin-top: 0.75rem; font-size: 0.8rem; color: var(--text-secondary);">
+        {% if campaign.template_version_id %}
+          Linked to Template Version #{{ campaign.template_version_id }} (Snapshot frozen)
+        {% else %}
+          Inline Custom Template (Snapshot frozen)
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Pacing Settings -->
+    <div class="card">
+      <h2 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 0.75rem;">Pacing Settings</h2>
+      <ul style="list-style: none; padding: 0; font-size: 0.9rem;">
+        <li style="display: flex; justify-content: space-between; padding: 0.4rem 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
+          <span style="color: var(--text-secondary);">Daily Limit:</span>
+          <strong>{{ campaign.daily_limit }} msgs/day</strong>
+        </li>
+        <li style="display: flex; justify-content: space-between; padding: 0.4rem 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
+          <span style="color: var(--text-secondary);">Delay Range:</span>
+          <strong>{{ campaign.min_delay_seconds }} - {{ campaign.max_delay_seconds }} sec</strong>
+        </li>
+        <li style="display: flex; justify-content: space-between; padding: 0.4rem 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
+          <span style="color: var(--text-secondary);">Batch Size:</span>
+          <strong>{{ campaign.batch_size }} msgs</strong>
+        </li>
+        <li style="display: flex; justify-content: space-between; padding: 0.4rem 0;">
+          <span style="color: var(--text-secondary);">Batch Pause:</span>
+          <strong>{{ campaign.batch_pause_seconds }} sec</strong>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Contact Statistics Breakdown -->
+  <div class="card" style="margin-bottom: 1.5rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+      <h2 style="font-size: 1.1rem; font-weight: 700;">Campaign Contacts Breakdown</h2>
+      <span style="font-size: 0.9rem; font-weight: 600; color: var(--accent);">
+        {{ campaign.stats.completion_percentage }}% Completed
+      </span>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 1rem; text-align: center;">
+      <div style="background: rgba(255,255,255,0.02); padding: 0.75rem; border-radius: var(--radius); border: 1px solid var(--border);">
+        <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Total</div>
+        <div style="font-size: 1.4rem; font-weight: 700; margin-top: 0.2rem;">{{ campaign.stats.total_contacts }}</div>
+      </div>
+      <div style="background: rgba(255,255,255,0.02); padding: 0.75rem; border-radius: var(--radius); border: 1px solid var(--border);">
+        <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Pending</div>
+        <div style="font-size: 1.4rem; font-weight: 700; margin-top: 0.2rem;">{{ campaign.stats.pending }}</div>
+      </div>
+      <div style="background: rgba(255,255,255,0.02); padding: 0.75rem; border-radius: var(--radius); border: 1px solid var(--border);">
+        <div style="font-size: 0.75rem; color: var(--accent-green); text-transform: uppercase;">Eligible</div>
+        <div style="font-size: 1.4rem; font-weight: 700; margin-top: 0.2rem; color: var(--accent-green);">{{ campaign.stats.eligible }}</div>
+      </div>
+      <div style="background: rgba(255,255,255,0.02); padding: 0.75rem; border-radius: var(--radius); border: 1px solid var(--border);">
+        <div style="font-size: 0.75rem; color: var(--accent-amber); text-transform: uppercase;">Excluded</div>
+        <div style="font-size: 1.4rem; font-weight: 700; margin-top: 0.2rem; color: var(--accent-amber);">{{ campaign.stats.excluded }}</div>
+      </div>
+      <div style="background: rgba(255,255,255,0.02); padding: 0.75rem; border-radius: var(--radius); border: 1px solid var(--border);">
+        <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Queued</div>
+        <div style="font-size: 1.4rem; font-weight: 700; margin-top: 0.2rem;">{{ campaign.stats.queued }}</div>
+      </div>
+      <div style="background: rgba(255,255,255,0.02); padding: 0.75rem; border-radius: var(--radius); border: 1px solid var(--border);">
+        <div style="font-size: 0.75rem; color: var(--accent-green); text-transform: uppercase;">Sent</div>
+        <div style="font-size: 1.4rem; font-weight: 700; margin-top: 0.2rem; color: var(--accent-green);">{{ campaign.stats.sent }}</div>
+      </div>
+      <div style="background: rgba(255,255,255,0.02); padding: 0.75rem; border-radius: var(--radius); border: 1px solid var(--border);">
+        <div style="font-size: 0.75rem; color: var(--accent-red); text-transform: uppercase;">Failed</div>
+        <div style="font-size: 1.4rem; font-weight: 700; margin-top: 0.2rem; color: var(--accent-red);">{{ campaign.stats.failed }}</div>
+      </div>
+      <div style="background: rgba(255,255,255,0.02); padding: 0.75rem; border-radius: var(--radius); border: 1px solid var(--border);">
+        <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Skipped</div>
+        <div style="font-size: 1.4rem; font-weight: 700; margin-top: 0.2rem;">{{ campaign.stats.skipped }}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Campaign Contacts Table Section -->
+  <div class="card" style="padding: 0; overflow: hidden; margin-bottom: 1.5rem;">
+    <div style="padding: 1rem 1.5rem; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); flex-wrap: wrap; gap: 1rem;">
+      <h2 style="font-size: 1.1rem; font-weight: 700;">Participants List</h2>
+      
+      <!-- Filter status -->
+      <div style="display: flex; gap: 0.5rem; align-items: center;">
+        <form method="GET" action="/campaigns/{{ campaign.id }}" style="display: flex; gap: 0.5rem;">
+          <select name="contact_status" class="form-input" style="padding: 0.35rem 0.5rem; font-size: 0.85rem;" onchange="this.form.submit()">
+            <option value="">All Participation States</option>
+            <option value="ELIGIBLE" {% if contact_status == 'ELIGIBLE' %}selected{% endif %}>ELIGIBLE</option>
+            <option value="EXCLUDED" {% if contact_status == 'EXCLUDED' %}selected{% endif %}>EXCLUDED</option>
+            <option value="QUEUED" {% if contact_status == 'QUEUED' %}selected{% endif %}>QUEUED</option>
+            <option value="SENT" {% if contact_status == 'SENT' %}selected{% endif %}>SENT</option>
+            <option value="FAILED" {% if contact_status == 'FAILED' %}selected{% endif %}>FAILED</option>
+            <option value="SKIPPED" {% if contact_status == 'SKIPPED' %}selected{% endif %}>SKIPPED</option>
+          </select>
+        </form>
+        
+        {% if campaign.status == 'DRAFT' %}
+          <button onclick="openAddContactsModal()" class="btn btn-primary btn-sm" style="width: auto;">+ Add Contacts</button>
+        {% endif %}
+      </div>
+    </div>
+
+    <table class="table" style="width: 100%; border-collapse: collapse; text-align: left;">
+      <thead>
+        <tr style="background-color: rgba(255, 255, 255, 0.03); border-bottom: 1px solid var(--border);">
+          <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">Contact Name</th>
+          <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">Phone Number</th>
+          <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">Company</th>
+          <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">Status</th>
+          <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">Reason / Notes</th>
+          {% if campaign.status == 'DRAFT' %}
+          <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; text-align: right;">Action</th>
+          {% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% if contacts %}
+          {% for c in contacts %}
+          <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.05);">
+            <td style="padding: 0.85rem 1rem; font-weight: 600;">
+              <a href="/contacts/{{ c.contact_id }}" style="color: var(--text-primary); text-decoration: none;">{{ c.contact_name }}</a>
+            </td>
+            <td style="padding: 0.85rem 1rem; font-family: monospace; font-size: 0.9rem;">{{ c.contact_phone }}</td>
+            <td style="padding: 0.85rem 1rem; color: var(--text-secondary); font-size: 0.9rem;">{{ c.contact_company or '—' }}</td>
+            <td style="padding: 0.85rem 1rem;">
+              <span class="status-pill status-{{ c.status.lower() }}">{{ c.status }}</span>
+            </td>
+            <td style="padding: 0.85rem 1rem; font-size: 0.85rem; color: var(--text-secondary);">
+              {{ c.exclusion_reason or '—' }}
+            </td>
+            {% if campaign.status == 'DRAFT' %}
+            <td style="padding: 0.85rem 1rem; text-align: right;">
+              <button onclick="removeContact({{ campaign.id }}, {{ c.contact_id }})" class="btn btn-danger btn-sm" style="width: auto;">Remove</button>
+            </td>
+            {% endif %}
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="6" style="padding: 3rem; text-align: center; color: var(--text-secondary);">
+              No contacts assigned to this campaign yet.
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<!-- Modal for Adding Contacts -->
+<div id="add-contacts-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center;">
+  <div class="card" style="width: 100%; max-width: 600px; max-height: 80vh; display: flex; flex-direction: column;">
+    <h3 style="font-size: 1.2rem; font-weight: 700; margin-bottom: 0.5rem;">Add Contacts to Campaign</h3>
+    <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">
+      Select contacts to enroll. Eligibility checks (opt-out, invalid phone, duplicates) will be run automatically.
+    </p>
+
+    <div style="flex: 1; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); padding: 0.5rem; margin-bottom: 1rem;">
+      {% if available_contacts %}
+        {% for ac in available_contacts %}
+          <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem; border-bottom: 1px solid rgba(255,255,255,0.03); cursor: pointer;">
+            <input type="checkbox" name="selected_contact_id" value="{{ ac.id }}">
+            <span style="font-weight: 500;">{{ ac.name }}</span>
+            <span style="font-family: monospace; font-size: 0.85rem; color: var(--text-secondary);">({{ ac.phone_e164 }})</span>
+            {% if ac.company %}
+              <span style="font-size: 0.8rem; color: var(--text-secondary); margin-left: auto;">{{ ac.company }}</span>
+            {% endif %}
+          </label>
+        {% endfor %}
+      {% else %}
+        <p style="text-align: center; color: var(--text-secondary); padding: 1rem;">No contacts available to add.</p>
+      {% endif %}
+    </div>
+
+    <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+      <button onclick="closeAddContactsModal()" class="btn btn-secondary" style="width: auto;">Cancel</button>
+      <button onclick="submitAddContacts({{ campaign.id }})" id="btn-confirm-add-contacts" class="btn btn-primary" style="width: auto;">Enroll Contacts</button>
+    </div>
+  </div>
+</div>
+
+<script>
+async function transitionCampaignStatus(newStatus) {
+  if (!confirm(`Are you sure you want to transition this campaign to ${newStatus}?`)) {
+    return;
+  }
+  const alertBox = document.getElementById('detail-alert');
+  alertBox.style.display = 'none';
+
+  try {
+    const res = await fetch(`/api/v1/campaigns/{{ campaign.id }}/status`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCsrfToken(),
+      },
+      body: JSON.stringify({ status: newStatus })
+    });
+    const result = await res.json();
+    if (res.ok && result.success) {
+      window.location.reload();
+    } else {
+      alertBox.className = 'alert alert-danger';
+      alertBox.textContent = result.error?.message || result.detail || 'Failed to update campaign status.';
+      alertBox.style.display = 'block';
+    }
+  } catch (err) {
+    alertBox.className = 'alert alert-danger';
+    alertBox.textContent = 'Network or server error occurred.';
+    alertBox.style.display = 'block';
+  }
+}
+
+function openAddContactsModal() {
+  document.getElementById('add-contacts-modal').style.display = 'flex';
+}
+
+function closeAddContactsModal() {
+  document.getElementById('add-contacts-modal').style.display = 'none';
+}
+
+async function submitAddContacts(campaignId) {
+  const checkboxes = document.querySelectorAll('input[name="selected_contact_id"]:checked');
+  const ids = Array.from(checkboxes).map(cb => parseInt(cb.value, 10));
+  if (ids.length === 0) {
+    alert('Please select at least one contact to add.');
+    return;
+  }
+
+  const btn = document.getElementById('btn-confirm-add-contacts');
+  btn.disabled = true;
+  btn.textContent = 'Enrolling...';
+
+  try {
+    const res = await fetch(`/api/v1/campaigns/${campaignId}/contacts`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCsrfToken(),
+      },
+      body: JSON.stringify({ contact_ids: ids })
+    });
+    const result = await res.json();
+    if (res.ok && result.success) {
+      window.location.reload();
+    } else {
+      alert(result.error?.message || result.detail || 'Failed to add contacts.');
+      btn.disabled = false;
+      btn.textContent = 'Enroll Contacts';
+    }
+  } catch (err) {
+    alert('Network error adding contacts.');
+    btn.disabled = false;
+    btn.textContent = 'Enroll Contacts';
+  }
+}
+
+async function removeContact(campaignId, contactId) {
+  if (!confirm('Remove this contact from the campaign?')) {
+    return;
+  }
+  try {
+    const res = await fetch(`/api/v1/campaigns/${campaignId}/contacts/${contactId}`, {
+      method: 'DELETE',
+      headers: {
+        'X-CSRF-Token': getCsrfToken(),
+      }
+    });
+    const result = await res.json();
+    if (res.ok && result.success) {
+      window.location.reload();
+    } else {
+      alert(result.error?.message || result.detail || 'Failed to remove contact.');
+    }
+  } catch (err) {
+    alert('Network error removing contact.');
+  }
+}
+</script>
+{% endblock %}

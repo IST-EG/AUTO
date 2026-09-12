@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+
+{% block title %}Error &bull; Integra Outreach{% endblock %}
+
+{% block content %}
+<div class="auth-wrapper">
+  <div class="card auth-card" style="text-align: center;">
+    <h1 class="card-title" style="color: var(--accent-red);">{{ error_code or "Error" }}</h1>
+    <p class="card-subtitle">{{ error_message or "An unexpected condition was encountered." }}</p>
+    <a href="/" class="btn btn-secondary">Return to Home</a>
+  </div>
+</div>
+{% endblock %}

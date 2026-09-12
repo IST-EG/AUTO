@@ -1,0 +1,391 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard &bull; Integra Outreach Control Center{% endblock %}
+
+{% block content %}
+<div class="container" style="padding-top: 1.5rem; padding-bottom: 2.5rem;">
+
+  <!-- Nav Tabs -->
+  <nav class="nav-tabs">
+    <a href="/dashboard" class="nav-link active">Dashboard</a>
+    <a href="/campaigns" class="nav-link">Campaigns</a>
+    <a href="/queue" class="nav-link">Queue</a>
+    <a href="/contacts" class="nav-link">Contacts</a>
+    <a href="/templates" class="nav-link">Templates</a>
+    <span class="nav-link disabled">Analytics <span class="nav-badge-soon">Coming Soon</span></span>
+    <span class="nav-link disabled">WhatsApp <span class="nav-badge-soon">Coming Soon</span></span>
+    <span class="nav-link disabled">Settings <span class="nav-badge-soon">Coming Soon</span></span>
+  </nav>
+
+  <!-- Dashboard Header -->
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+    <div>
+      <h1 style="font-size: 1.85rem; font-weight: 800;">Operational Control Center</h1>
+      <p style="color: var(--text-secondary); font-size: 0.9rem;">Real-time system telemetry and process supervision</p>
+    </div>
+    <div style="display: flex; align-items: center; gap: 1rem;">
+      <div id="telemetry-indicator" class="telemetry-indicator">
+        <span id="telemetry-dot" class="pulse-dot pulse"></span>
+        <span id="telemetry-text">Connecting...</span>
+      </div>
+      <button id="btn-refresh" class="btn btn-secondary btn-sm" style="width: auto;" title="Force refresh snapshot">Refresh</button>
+    </div>
+  </div>
+
+  <!-- Global Banner / Alert -->
+  <div id="dashboard-global-alert" class="alert" style="display: none;"></div>
+
+  <!-- TOP KPI CARDS -->
+  <div class="dashboard-grid">
+    <!-- KPI 1: System Health -->
+    <div class="metric-card">
+      <div class="metric-label">System Health</div>
+      <div class="metric-value">
+        <span id="kpi-system-health" class="status-pill status-{{ snapshot.system_health.state.lower() }}">
+          {{ snapshot.system_health.state }}
+        </span>
+      </div>
+      <div class="metric-subtext" id="kpi-system-health-subtext">
+        {% if snapshot.system_health.reasons %}
+          {{ snapshot.system_health.reasons[0] }}
+        {% else %}
+          All monitored subsystems fully operational
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- KPI 2: Confirmed Send Rate -->
+    <div class="metric-card">
+      <div class="metric-label">CONFIRMED SEND RATE</div>
+      <div class="metric-value" id="kpi-send-rate">
+        {% if snapshot.active_campaign and snapshot.active_campaign.confirmed_send_rate is not none %}
+          {{ snapshot.active_campaign.confirmed_send_rate }}%
+        {% else %}
+          N/A
+        {% endif %}
+      </div>
+      <div class="metric-subtext" title="Formula: Confirmed / (Confirmed + Failed + Unknown Outcome)">
+        Confirmed / (Confirmed + Failed + Unknown)
+      </div>
+    </div>
+
+    <!-- KPI 3: Queue Depth -->
+    <div class="metric-card">
+      <div class="metric-label">Queue Depth</div>
+      <div class="metric-value" id="kpi-queue-depth">
+        {{ snapshot.queue.queued + snapshot.queue.processing }}
+      </div>
+      <div class="metric-subtext" id="kpi-queue-subtext">
+        {{ snapshot.queue.queued }} pending, {{ snapshot.queue.processing }} claimed
+      </div>
+    </div>
+
+    <!-- KPI 4: Runner Status -->
+    <div class="metric-card">
+      <div class="metric-label">Runner Process</div>
+      <div class="metric-value">
+        <span id="kpi-runner-status" class="status-pill status-{{ snapshot.runner.state.lower() }}">
+          {{ snapshot.runner.state }}
+        </span>
+      </div>
+      <div class="metric-subtext" id="kpi-runner-subtext">
+        {% if snapshot.runner.pid %}PID: {{ snapshot.runner.pid }}{% else %}OS lock released{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 2: SUBSYSTEM HEALTH & CONTROLS -->
+  <div class="dashboard-cols-3">
+    <!-- Subsystems Health Card -->
+    <div class="metric-card">
+      <div class="metric-label" style="margin-bottom: 0.75rem;">Subsystem Telemetry</div>
+      
+      <div class="subsystem-row">
+        <span class="subsystem-name">Database Connectivity</span>
+        <span id="subsystem-db" class="status-pill status-{% if snapshot.database.connected %}healthy{% else %}unhealthy{% endif %}">
+          {{ snapshot.database.status }}
+        </span>
+      </div>
+
+      <div class="subsystem-row">
+        <span class="subsystem-name">WhatsApp Profile</span>
+        <span id="subsystem-whatsapp" class="status-pill status-{% if snapshot.whatsapp.profile_exists %}healthy{% else %}unhealthy{% endif %}">
+          {% if snapshot.whatsapp.profile_exists %}Configured{% else %}Missing Profile{% endif %}
+        </span>
+      </div>
+
+      <div class="subsystem-row">
+        <span class="subsystem-name">Emergency Stop</span>
+        <span id="subsystem-estop" class="status-pill status-{% if snapshot.emergency_stop.is_active %}armed{% else %}disarmed{% endif %}">
+          {% if snapshot.emergency_stop.is_active %}ARMED{% else %}DISARMED{% endif %}
+        </span>
+      </div>
+
+      <div class="subsystem-row">
+        <span class="subsystem-name">Circuit Breaker</span>
+        <span id="subsystem-cb" class="status-pill status-{{ snapshot.circuit_breaker.status.lower() }}">
+          {{ snapshot.circuit_breaker.status }}
+        </span>
+      </div>
+    </div>
+
+    <!-- Safe Runner Control Card -->
+    <div class="metric-card">
+      <div class="metric-label" style="margin-bottom: 0.75rem;">Safe Runner Control</div>
+      <div style="font-size: 0.85rem; margin-bottom: 1rem; color: var(--text-secondary);">
+        OS file lock is authoritative. Production allows exactly one active runner.
+      </div>
+
+      <div style="margin-bottom: 1rem; font-size: 0.85rem;">
+        <div><strong>State:</strong> <span id="ctrl-runner-state">{{ snapshot.runner.state }}</span></div>
+        <div><strong>Campaign ID:</strong> <span id="ctrl-runner-campaign">{{ snapshot.runner.campaign_id or 'None' }}</span></div>
+        <div><strong>Heartbeat:</strong> <span id="ctrl-runner-heartbeat">{{ snapshot.runner.heartbeat_age_seconds ~ 's ago' if snapshot.runner.heartbeat_age_seconds is not none else 'None' }}</span></div>
+      </div>
+
+      <div style="display: flex; gap: 0.75rem;">
+        <button id="btn-start-runner" class="btn btn-primary btn-sm"
+          {% if snapshot.runner.state == 'RUNNING' or current_user.role == 'VIEWER' %}disabled{% endif %}>
+          Start Runner
+        </button>
+        <button id="btn-stop-runner" class="btn btn-warning btn-sm"
+          {% if snapshot.runner.state != 'RUNNING' or current_user.role == 'VIEWER' %}disabled{% endif %}>
+          Stop Runner
+        </button>
+      </div>
+    </div>
+
+    <!-- Emergency Stop Control Card -->
+    <div class="metric-card">
+      <div class="metric-label" style="margin-bottom: 0.75rem;">Emergency Controls</div>
+      <div style="font-size: 0.85rem; margin-bottom: 1rem; color: var(--text-secondary);">
+        Signal target &lt;500ms. Halts NEW queue claims. Never forcefully aborts in-flight browser sends.
+      </div>
+
+      <div style="margin-bottom: 1rem; font-size: 0.85rem;">
+        <div><strong>Signal State:</strong> 
+          <span id="ctrl-estop-state" class="status-pill status-{% if snapshot.emergency_stop.is_active %}armed{% else %}disarmed{% endif %}">
+            {% if snapshot.emergency_stop.is_active %}ARMED{% else %}DISARMED{% endif %}
+          </span>
+        </div>
+        <div><strong>Triggered At:</strong> <span id="ctrl-estop-triggered">{{ snapshot.emergency_stop.activated_at or 'Never' }}</span></div>
+        <div><strong>Reason:</strong> <span id="ctrl-estop-reason">{{ snapshot.emergency_stop.reason or 'None' }}</span></div>
+      </div>
+
+      <div style="display: flex; gap: 0.75rem;">
+        <button id="btn-emergency-stop" class="btn btn-danger btn-sm"
+          {% if snapshot.emergency_stop.is_active or current_user.role == 'VIEWER' %}disabled{% endif %}>
+          Emergency Stop
+        </button>
+        <button id="btn-emergency-resume" class="btn btn-success btn-sm"
+          {% if not snapshot.emergency_stop.is_active or current_user.role not in ['ADMIN', 'OWNER'] %}disabled{% endif %}>
+          Resume Operations
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 3: ACTIVE CAMPAIGN & QUEUE BREAKDOWN -->
+  <div class="dashboard-cols-2">
+    <!-- Active Campaign Card -->
+    <div class="metric-card">
+      <div class="metric-label" style="margin-bottom: 0.75rem;">Active Campaign</div>
+      <div id="active-campaign-container">
+        {% if snapshot.active_campaign %}
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <h3 style="font-size: 1.15rem; font-weight: 700;" id="campaign-name">{{ snapshot.active_campaign.name }}</h3>
+            <span class="status-pill status-{{ snapshot.active_campaign.status.lower() }}" id="campaign-status">{{ snapshot.active_campaign.status }}</span>
+          </div>
+          <div style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.75rem;">
+            Campaign ID: <span id="campaign-id">{{ snapshot.active_campaign.id }}</span>
+          </div>
+
+          <div class="progress-bar-container">
+            <div id="campaign-progress-bar" class="progress-bar-fill" style="width: {{ snapshot.active_campaign.completion_percentage }}%;"></div>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">
+            <span>Completed Contacts: {{ snapshot.active_campaign.send_confirmed + snapshot.active_campaign.failed + snapshot.active_campaign.unknown_outcome }} / {{ snapshot.active_campaign.total_contacts }}</span>
+            <span id="campaign-progress-pct">{{ snapshot.active_campaign.completion_percentage }}%</span>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; font-size: 0.85rem; text-align: center;">
+            <div style="background: var(--bg-input); padding: 0.5rem; border-radius: 4px;">
+              <div style="font-weight: 700; color: #34d399;" id="camp-confirmed">{{ snapshot.active_campaign.send_confirmed }}</div>
+              <div style="font-size: 0.7rem; color: var(--text-secondary);">CONFIRMED</div>
+            </div>
+            <div style="background: var(--bg-input); padding: 0.5rem; border-radius: 4px;">
+              <div style="font-weight: 700; color: #f87171;" id="camp-failed">{{ snapshot.active_campaign.failed }}</div>
+              <div style="font-size: 0.7rem; color: var(--text-secondary);">FAILED</div>
+            </div>
+            <div style="background: var(--bg-input); padding: 0.5rem; border-radius: 4px;">
+              <div style="font-weight: 700; color: #fbbf24;" id="camp-unknown">{{ snapshot.active_campaign.unknown_outcome }}</div>
+              <div style="font-size: 0.7rem; color: var(--text-secondary);">UNKNOWN OUTCOME</div>
+            </div>
+          </div>
+        {% else %}
+          <div style="padding: 2rem 1rem; text-align: center; color: var(--text-secondary);">
+            No active or running campaign. Start a campaign using the CLI or campaign controls.
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Queue Status Breakdown -->
+    <div class="metric-card">
+      <div class="metric-label" style="margin-bottom: 0.75rem;">Queue Breakdown</div>
+      
+      <div class="queue-grid">
+        <div class="queue-card">
+          <div class="queue-count" id="qc-pending">{{ snapshot.queue.queued }}</div>
+          <div class="queue-name">PENDING</div>
+        </div>
+        <div class="queue-card">
+          <div class="queue-count" id="qc-claimed">{{ snapshot.queue.processing }}</div>
+          <div class="queue-name">CLAIMED</div>
+        </div>
+        <div class="queue-card">
+          <div class="queue-count" style="color: #34d399;" id="qc-confirmed">{{ snapshot.queue.confirmed_sends }}</div>
+          <div class="queue-name">CONFIRMED</div>
+        </div>
+        <div class="queue-card">
+          <div class="queue-count" style="color: #f87171;" id="qc-failed">{{ snapshot.queue.failed }}</div>
+          <div class="queue-name">FAILED</div>
+        </div>
+        <div class="queue-card">
+          <div class="queue-count" style="color: #cbd5e1;" id="qc-retry">{{ snapshot.queue.retry_pending }}</div>
+          <div class="queue-name">RETRY PENDING</div>
+        </div>
+        <div class="queue-card unknown-outcome" style="grid-column: span 2;">
+          <div class="queue-count" id="qc-unknown-outcome">{{ snapshot.queue.unknown_outcome }}</div>
+          <div class="queue-name">UNKNOWN OUTCOME</div>
+          <div style="font-size: 0.7rem; color: #fbbf24; margin-top: 0.2rem;">
+            Unconfirmed sends requiring operator reconciliation
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 4: OPERATIONAL ALERTS -->
+  <div class="metric-card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+      <div class="metric-label">Operational Alerts</div>
+      <span id="alerts-count-badge" class="badge" style="background-color: {% if snapshot.alerts %}var(--accent-amber){% else %}var(--accent-green){% endif %};">
+        {{ snapshot.alerts|length }} active
+      </span>
+    </div>
+
+    <div id="alerts-container" class="alert-list">
+      {% if snapshot.alerts %}
+        {% for alert in snapshot.alerts %}
+          <div class="alert-item {{ alert.severity }}">
+            <div><strong>[{{ alert.severity }}]</strong> {{ alert.message }} <span style="font-size: 0.75rem; opacity: 0.8;">({{ alert.id }})</span></div>
+          </div>
+        {% endfor %}
+      {% else %}
+        <div style="color: var(--text-secondary); font-size: 0.9rem; text-align: center; padding: 1rem 0;">
+          All systems operational. No active alerts.
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
+<!-- CONFIRMATION MODALS -->
+
+<!-- Modal: Start Runner -->
+<div id="modal-start-runner" class="modal-backdrop">
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <div class="modal-title">Start Production Runner</div>
+      <button class="btn-close btn-sm btn-outline" onclick="closeModal('modal-start-runner')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="margin-bottom: 1rem; font-size: 0.9rem;">
+        You are requesting to launch a production runner process. Exactly one runner may run concurrently.
+      </p>
+      <div class="form-group">
+        <label for="start-runner-campaign-id">Campaign ID to Execute:</label>
+        <input type="number" id="start-runner-campaign-id" value="{% if snapshot.active_campaign %}{{ snapshot.active_campaign.id }}{% endif %}" placeholder="Enter Campaign ID">
+      </div>
+      <div id="start-runner-error" class="alert alert-error"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary btn-sm" onclick="closeModal('modal-start-runner')">Cancel</button>
+      <button id="btn-confirm-start-runner" class="btn btn-primary btn-sm">Confirm Start</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Stop Runner -->
+<div id="modal-stop-runner" class="modal-backdrop">
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <div class="modal-title">Stop Production Runner</div>
+      <button class="btn-close btn-sm btn-outline" onclick="closeModal('modal-stop-runner')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="margin-bottom: 1rem; font-size: 0.9rem;">
+        This sends a graceful termination signal (SIGTERM). In-flight browser dispatches will reach their safe cancellation/confirmation point before the process exits.
+      </p>
+      <div id="stop-runner-error" class="alert alert-error"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary btn-sm" onclick="closeModal('modal-stop-runner')">Cancel</button>
+      <button id="btn-confirm-stop-runner" class="btn btn-warning btn-sm">Confirm Stop</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Emergency Stop -->
+<div id="modal-emergency-stop" class="modal-backdrop">
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <div class="modal-title" style="color: #f87171;">ARM EMERGENCY STOP</div>
+      <button class="btn-close btn-sm btn-outline" onclick="closeModal('modal-emergency-stop')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="margin-bottom: 1rem; font-size: 0.9rem; color: #fca5a5;">
+        <strong>WARNING:</strong> This sets the system-wide emergency stop flag (&lt;500ms target). All workers will immediately cease claiming NEW queue items. In-flight sends will finish at safe points.
+      </p>
+      <div class="form-group">
+        <label for="estop-reason">Reason for Emergency Stop (Required):</label>
+        <input type="text" id="estop-reason" placeholder="e.g. Account restriction detected, incorrect template">
+      </div>
+      <div id="emergency-stop-error" class="alert alert-error"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary btn-sm" onclick="closeModal('modal-emergency-stop')">Cancel</button>
+      <button id="btn-confirm-emergency-stop" class="btn btn-danger btn-sm">ARM EMERGENCY STOP</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Emergency Resume -->
+<div id="modal-emergency-resume" class="modal-backdrop">
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <div class="modal-title" style="color: #34d399;">Disarm Emergency Stop</div>
+      <button class="btn-close btn-sm btn-outline" onclick="closeModal('modal-emergency-resume')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="margin-bottom: 1rem; font-size: 0.9rem;">
+        This will disarm the emergency stop flag and permit runner processes to resume processing queued messages. <strong>Requires ADMIN or OWNER role.</strong>
+      </p>
+      <div class="form-group">
+        <label for="resume-reason">Reason for Resuming Operations (Required):</label>
+        <input type="text" id="resume-reason" placeholder="e.g. Issue resolved, template corrected">
+      </div>
+      <div id="emergency-resume-error" class="alert alert-error"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary btn-sm" onclick="closeModal('modal-emergency-resume')">Cancel</button>
+      <button id="btn-confirm-emergency-resume" class="btn btn-success btn-sm">Resume Operations</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  window.CURRENT_USER_ROLE = "{{ current_user.role }}";
+</script>
+{% endblock %}

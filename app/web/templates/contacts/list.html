@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+
+{% block title %}Contacts &bull; Integra Outreach Control Center{% endblock %}
+
+{% block content %}
+<div class="container" style="padding-top: 1.5rem; padding-bottom: 2.5rem;">
+
+  <!-- Nav Tabs -->
+  <nav class="nav-tabs">
+    <a href="/dashboard" class="nav-link">Dashboard</a>
+    <a href="/campaigns" class="nav-link">Campaigns</a>
+    <a href="/queue" class="nav-link">Queue</a>
+    <a href="/contacts" class="nav-link active">Contacts</a>
+    <a href="/templates" class="nav-link">Templates</a>
+    <span class="nav-link disabled">Analytics <span class="nav-badge-soon">Coming Soon</span></span>
+    <span class="nav-link disabled">WhatsApp <span class="nav-badge-soon">Coming Soon</span></span>
+    <span class="nav-link disabled">Settings <span class="nav-badge-soon">Coming Soon</span></span>
+  </nav>
+
+  <!-- Header -->
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+    <div>
+      <h1 style="font-size: 1.85rem; font-weight: 800;">Contacts Directory</h1>
+      <p style="color: var(--text-secondary); font-size: 0.9rem;">Manage target contacts, consent states, and audience segmentation</p>
+    </div>
+    <div style="display: flex; gap: 0.75rem;">
+      <a href="/contacts/import" class="btn btn-secondary" style="width: auto;">Import CSV</a>
+      <a href="/api/v1/contacts/export" class="btn btn-secondary" style="width: auto;">Export CSV</a>
+      <button onclick="openCreateContactModal()" class="btn btn-primary" style="width: auto;">+ New Contact</button>
+    </div>
+  </div>
+
+  <!-- Search & Filter Bar -->
+  <form method="GET" action="/contacts" class="card" style="padding: 1rem; margin-bottom: 1.5rem; display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end;">
+    <div style="flex: 1; min-width: 200px;">
+      <label style="font-size: 0.8rem; color: var(--text-secondary); display: block; margin-bottom: 0.25rem;">Search</label>
+      <input type="text" name="search" value="{{ search_query }}" placeholder="Filter by name, phone, company, city..." class="form-input" style="width: 100%;">
+    </div>
+    <div style="min-width: 160px;">
+      <label style="font-size: 0.8rem; color: var(--text-secondary); display: block; margin-bottom: 0.25rem;">Consent</label>
+      <select name="consent_status" class="form-input" style="width: 100%;">
+        <option value="">All Consent</option>
+        <option value="opted_in" {% if consent_status == 'opted_in' %}selected{% endif %}>Opted In</option>
+        <option value="pending" {% if consent_status == 'pending' %}selected{% endif %}>Pending</option>
+        <option value="opted_out" {% if consent_status == 'opted_out' %}selected{% endif %}>Opted Out</option>
+      </select>
+    </div>
+    <div style="min-width: 160px;">
+      <label style="font-size: 0.8rem; color: var(--text-secondary); display: block; margin-bottom: 0.25rem;">Status</label>
+      <select name="contact_status" class="form-input" style="width: 100%;">
+        <option value="">All Statuses</option>
+        <option value="active" {% if contact_status == 'active' %}selected{% endif %}>Active</option>
+        <option value="inactive" {% if contact_status == 'inactive' %}selected{% endif %}>Inactive</option>
+        <option value="duplicate" {% if contact_status == 'duplicate' %}selected{% endif %}>Duplicate</option>
+      </select>
+    </div>
+    <div>
+      <button type="submit" class="btn btn-secondary" style="width: auto;">Apply Filter</button>
+      <a href="/contacts" class="btn btn-secondary" style="width: auto; text-decoration: none;">Reset</a>
+    </div>
+  </form>
+
+  <!-- Contacts Table -->
+  <div class="card" style="padding: 0; overflow: hidden;">
+    <table class="table" style="width: 100%; border-collapse: collapse; text-align: left;">
+      <thead>
+        <tr style="background-color: rgba(255, 255, 255, 0.03); border-bottom: 1px solid var(--border);">
+          <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">ID</th>
+          <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">Name</th>
+          <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">Phone Number</th>
+          <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">Company</th>
+          <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">City</th>
+          <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">Consent</th>
+          <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">Status</th>
+          <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">Sends</th>
+          <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; text-align: right;">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if contacts %}
+          {% for c in contacts %}
+          <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.05);">
+            <td style="padding: 0.85rem 1rem; font-size: 0.9rem; color: var(--text-secondary);">#{{ c.id }}</td>
+            <td style="padding: 0.85rem 1rem; font-weight: 600;">
+              <a href="/contacts/{{ c.id }}" style="color: var(--text-primary); text-decoration: none;">{{ c.name }}</a>
+            </td>
+            <td style="padding: 0.85rem 1rem; font-family: monospace; font-size: 0.85rem;">{{ c.phone_e164 }}</td>
+            <td style="padding: 0.85rem 1rem; color: var(--text-secondary); font-size: 0.9rem;">{{ c.company or '—' }}</td>
+            <td style="padding: 0.85rem 1rem; color: var(--text-secondary); font-size: 0.9rem;">{{ c.city or '—' }}</td>
+            <td style="padding: 0.85rem 1rem;">
+              <span class="status-pill status-{{ c.consent_status }}">{{ c.consent_status }}</span>
+            </td>
+            <td style="padding: 0.85rem 1rem;">
+              <span class="status-pill status-{{ c.contact_status }}">{{ c.contact_status }}</span>
+            </td>
+            <td style="padding: 0.85rem 1rem; font-size: 0.9rem;">{{ c.messages_sent_count }}</td>
+            <td style="padding: 0.85rem 1rem; text-align: right;">
+              <a href="/contacts/{{ c.id }}" class="btn btn-secondary btn-sm" style="width: auto; text-decoration: none;">View</a>
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="9" style="padding: 3rem; text-align: center; color: var(--text-secondary);">
+              No contacts found matching criteria. <a href="/contacts/import" style="color: var(--accent);">Import from CSV</a> or add manually.
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<!-- Modal: New Contact -->
+<div id="new-contact-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center;">
+  <div class="card" style="width: 100%; max-width: 500px;">
+    <h3 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 0.5rem;">Add New Contact</h3>
+    <div id="modal-alert" class="alert" style="display: none; margin-bottom: 1rem;"></div>
+
+    <form id="create-contact-form">
+      <div class="form-group">
+        <label for="c-name">Full Name *</label>
+        <input type="text" id="c-name" class="form-input" required placeholder="John Doe">
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 0.75rem;">
+        <div class="form-group">
+          <label for="c-country">Country Dial *</label>
+          <input type="text" id="c-country" class="form-input" required placeholder="20 or EG" value="20">
+        </div>
+        <div class="form-group">
+          <label for="c-phone">Phone Number *</label>
+          <input type="text" id="c-phone" class="form-input" required placeholder="1012345678">
+        </div>
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+        <div class="form-group">
+          <label for="c-company">Company</label>
+          <input type="text" id="c-company" class="form-input" placeholder="Acme Inc">
+        </div>
+        <div class="form-group">
+          <label for="c-city">City</label>
+          <input type="text" id="c-city" class="form-input" placeholder="Cairo">
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="c-consent">Consent Status</label>
+        <select id="c-consent" class="form-input">
+          <option value="pending">Pending</option>
+          <option value="opted_in">Opted In</option>
+          <option value="opted_out">Opted Out</option>
+        </select>
+      </div>
+      <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem;">
+        <button type="button" onclick="closeCreateContactModal()" class="btn btn-secondary" style="width: auto;">Cancel</button>
+        <button type="submit" id="btn-submit-contact" class="btn btn-primary" style="width: auto;">Save Contact</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openCreateContactModal() {
+  document.getElementById('new-contact-modal').style.display = 'flex';
+}
+function closeCreateContactModal() {
+  document.getElementById('new-contact-modal').style.display = 'none';
+}
+
+document.getElementById('create-contact-form').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const alertBox = document.getElementById('modal-alert');
+  const btn = document.getElementById('btn-submit-contact');
+  alertBox.style.display = 'none';
+
+  const name = document.getElementById('c-name').value.trim();
+  const country_code = document.getElementById('c-country').value.trim();
+  const phone_number = document.getElementById('c-phone').value.trim();
+  const company = document.getElementById('c-company').value.trim() || null;
+  const city = document.getElementById('c-city').value.trim() || null;
+  const consent_status = document.getElementById('c-consent').value;
+
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+
+  try {
+    const res = await fetch('/api/v1/contacts', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCsrfToken(),
+      },
+      body: JSON.stringify({
+        name: name,
+        country_code: country_code,
+        phone_number: phone_number,
+        company: company,
+        city: city,
+        consent_status: consent_status,
+      })
+    });
+    const result = await res.json();
+    if (res.ok && result.success) {
+      window.location.reload();
+    } else {
+      alertBox.className = 'alert alert-danger';
+      alertBox.textContent = result.error?.message || result.detail || 'Failed to save contact.';
+      alertBox.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Save Contact';
+    }
+  } catch (err) {
+    alertBox.className = 'alert alert-danger';
+    alertBox.textContent = 'Network or server error.';
+    alertBox.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Save Contact';
+  }
+});
+</script>
+{% endblock %}

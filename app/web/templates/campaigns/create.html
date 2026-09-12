@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+
+{% block title %}New Campaign &bull; Integra Outreach Control Center{% endblock %}
+
+{% block content %}
+<div class="container" style="padding-top: 1.5rem; padding-bottom: 2.5rem; max-width: 800px;">
+
+  <!-- Breadcrumb -->
+  <div style="margin-bottom: 1rem;">
+    <a href="/campaigns" style="color: var(--text-secondary); text-decoration: none; font-size: 0.9rem;">&larr; Back to Campaigns</a>
+  </div>
+
+  <div class="card" style="padding: 2rem;">
+    <h1 style="font-size: 1.5rem; font-weight: 700; margin-bottom: 0.5rem;">Create New Campaign</h1>
+    <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">
+      Configure campaign parameters and associate an immutable message template. New campaigns start in DRAFT state.
+    </p>
+
+    <div id="create-alert" class="alert" style="display: none; margin-bottom: 1.5rem;"></div>
+
+    <form id="create-campaign-form">
+      <div class="form-group">
+        <label for="campaign-name">Campaign Name *</label>
+        <input type="text" id="campaign-name" class="form-input" required placeholder="e.g. Q4 Executive Outreach">
+      </div>
+
+      <div class="form-group">
+        <label>Template Source</label>
+        <div style="display: flex; gap: 1rem; margin-bottom: 0.75rem;">
+          <label style="cursor: pointer; display: flex; align-items: center; gap: 0.4rem;">
+            <input type="radio" name="template-source" value="library" checked onchange="toggleTemplateSource()">
+            Select from Template Library
+          </label>
+          <label style="cursor: pointer; display: flex; align-items: center; gap: 0.4rem;">
+            <input type="radio" name="template-source" value="inline" onchange="toggleTemplateSource()">
+            Write Custom Template
+          </label>
+        </div>
+
+        <div id="library-template-select-box">
+          <select id="template-id-select" class="form-input" style="width: 100%;">
+            <option value="">-- Choose a template from library --</option>
+            {% for t in templates_list %}
+              <option value="{{ t.id }}">{{ t.name }} (v{{ t.latest_version }})</option>
+            {% endfor %}
+          </select>
+          <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.35rem;">
+            The template text will be snapshotted into this campaign at creation time.
+          </p>
+        </div>
+
+        <div id="inline-template-box" style="display: none;">
+          <textarea id="inline-template-text" class="form-input" rows="4" placeholder="Hi {{name}}, we noticed {{company}} is expanding in {{city}}..."></textarea>
+          <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.35rem;">
+            Supported variables: <code>{{ '{{name}}' }}</code>, <code>{{ '{{company}}' }}</code>, <code>{{ '{{city}}' }}</code>, <code>{{ '{{campaign}}' }}</code>.
+          </p>
+        </div>
+      </div>
+
+      <h3 style="font-size: 1.1rem; font-weight: 600; margin-top: 1.5rem; margin-bottom: 1rem; border-top: 1px solid var(--border); padding-top: 1rem;">
+        Pacing & Safety Controls
+      </h3>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+        <div class="form-group">
+          <label for="daily-limit">Daily Message Limit *</label>
+          <input type="number" id="daily-limit" class="form-input" value="100" min="1" required>
+        </div>
+        <div class="form-group">
+          <label for="batch-size">Batch Size *</label>
+          <input type="number" id="batch-size" class="form-input" value="20" min="1" required>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+        <div class="form-group">
+          <label for="min-delay">Min Delay (seconds) *</label>
+          <input type="number" id="min-delay" class="form-input" value="10" min="1" required>
+        </div>
+        <div class="form-group">
+          <label for="max-delay">Max Delay (seconds) *</label>
+          <input type="number" id="max-delay" class="form-input" value="30" min="1" required>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="batch-pause">Batch Pause (seconds) *</label>
+        <input type="number" id="batch-pause" class="form-input" value="60" min="0" required>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 1rem; margin-top: 2rem;">
+        <a href="/campaigns" class="btn btn-secondary" style="width: auto; text-decoration: none;">Cancel</a>
+        <button type="submit" id="btn-submit-campaign" class="btn btn-primary" style="width: auto;">Create Campaign</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function toggleTemplateSource() {
+  const isLibrary = document.querySelector('input[name="template-source"]:checked').value === 'library';
+  document.getElementById('library-template-select-box').style.display = isLibrary ? 'block' : 'none';
+  document.getElementById('inline-template-box').style.display = isLibrary ? 'none' : 'block';
+}
+
+document.getElementById('create-campaign-form').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const alertBox = document.getElementById('create-alert');
+  const btn = document.getElementById('btn-submit-campaign');
+  alertBox.style.display = 'none';
+
+  const isLibrary = document.querySelector('input[name="template-source"]:checked').value === 'library';
+  const name = document.getElementById('campaign-name').value.trim();
+  const daily_limit = parseInt(document.getElementById('daily-limit').value, 10);
+  const batch_size = parseInt(document.getElementById('batch-size').value, 10);
+  const min_delay_seconds = parseInt(document.getElementById('min-delay').value, 10);
+  const max_delay_seconds = parseInt(document.getElementById('max-delay').value, 10);
+  const batch_pause_seconds = parseInt(document.getElementById('batch-pause').value, 10);
+
+  const payload = {
+    name: name,
+    daily_limit: daily_limit,
+    batch_size: batch_size,
+    min_delay_seconds: min_delay_seconds,
+    max_delay_seconds: max_delay_seconds,
+    batch_pause_seconds: batch_pause_seconds,
+  };
+
+  if (isLibrary) {
+    const tmplId = document.getElementById('template-id-select').value;
+    if (!tmplId) {
+      alertBox.className = 'alert alert-danger';
+      alertBox.textContent = 'Please select a template from the library.';
+      alertBox.style.display = 'block';
+      return;
+    }
+    payload.template_id = parseInt(tmplId, 10);
+  } else {
+    const rawText = document.getElementById('inline-template-text').value.trim();
+    if (!rawText) {
+      alertBox.className = 'alert alert-danger';
+      alertBox.textContent = 'Please provide message template text.';
+      alertBox.style.display = 'block';
+      return;
+    }
+    payload.message_template = rawText;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Creating...';
+
+  try {
+    const res = await fetch('/api/v1/campaigns', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCsrfToken(),
+      },
+      body: JSON.stringify(payload)
+    });
+    const result = await res.json();
+    if (res.ok && result.success) {
+      window.location.href = `/campaigns/${result.data.id}`;
+    } else {
+      alertBox.className = 'alert alert-danger';
+      alertBox.textContent = result.error?.message || result.detail || 'Failed to create campaign.';
+      alertBox.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Create Campaign';
+    }
+  } catch (err) {
+    alertBox.className = 'alert alert-danger';
+    alertBox.textContent = 'Network or server error occurred.';
+    alertBox.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Create Campaign';
+  }
+});
+</script>
+{% endblock %}

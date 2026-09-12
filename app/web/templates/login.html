@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}Sign In &bull; Integra Outreach{% endblock %}
+
+{% block content %}
+<div class="auth-wrapper">
+  <div class="card auth-card">
+    <h1 class="card-title">Sign In</h1>
+    <p class="card-subtitle">Authenticate to access the operational control center.</p>
+
+    <div id="alert-box" class="alert"></div>
+
+    <form id="login-form">
+      <div class="form-group">
+        <label for="username">Username</label>
+        <input type="text" id="username" name="username" required autofocus placeholder="Enter your username">
+      </div>
+
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" required placeholder="Enter your password">
+      </div>
+
+      <button type="submit" id="submit-btn" class="btn btn-primary">Sign In</button>
+    </form>
+  </div>
+</div>
+
+<script>
+  // Ensure we have a fresh CSRF token upon visiting login
+  apiFetch('/api/v1/auth/csrf');
+
+  document.getElementById('login-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    hideAlert('alert-box');
+
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
+
+    const btn = document.getElementById('submit-btn');
+    btn.disabled = true;
+    btn.textContent = 'Authenticating...';
+
+    try {
+      const resp = await apiFetch('/api/v1/auth/login', {
+        method: 'POST',
+        body: { username, password }
+      });
+      const data = await resp.json();
+
+      if (resp.ok && data.success) {
+        window.location.href = '/dashboard';
+      } else {
+        const errorMsg = data.error?.message || 'Invalid username or password.';
+        showAlert('alert-box', errorMsg, 'error');
+        btn.disabled = false;
+        btn.textContent = 'Sign In';
+      }
+    } catch (err) {
+      showAlert('alert-box', 'Network error. Please check your connection.', 'error');
+      btn.disabled = false;
+      btn.textContent = 'Sign In';
+    }
+  });
+</script>
+{% endblock %}

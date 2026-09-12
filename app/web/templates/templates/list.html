@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Templates &bull; Integra Outreach Control Center{% endblock %}
+
+{% block content %}
+<div class="container" style="padding-top: 1.5rem; padding-bottom: 2.5rem;">
+
+  <!-- Nav Tabs -->
+  <nav class="nav-tabs">
+    <a href="/dashboard" class="nav-link">Dashboard</a>
+    <a href="/campaigns" class="nav-link">Campaigns</a>
+    <a href="/queue" class="nav-link">Queue</a>
+    <a href="/contacts" class="nav-link">Contacts</a>
+    <a href="/templates" class="nav-link active">Templates</a>
+    <span class="nav-link disabled">Analytics <span class="nav-badge-soon">Coming Soon</span></span>
+    <span class="nav-link disabled">WhatsApp <span class="nav-badge-soon">Coming Soon</span></span>
+    <span class="nav-link disabled">Settings <span class="nav-badge-soon">Coming Soon</span></span>
+  </nav>
+
+  <!-- Header -->
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+    <div>
+      <h1 style="font-size: 1.85rem; font-weight: 800;">Message Templates</h1>
+      <p style="color: var(--text-secondary); font-size: 0.9rem;">Reusable outreach message library with immutable version tracking</p>
+    </div>
+    <div>
+      <a href="/templates/new" class="btn btn-primary" style="width: auto;">+ New Template</a>
+    </div>
+  </div>
+
+  <!-- Templates Table -->
+  <div class="card" style="padding: 0; overflow: hidden;">
+    <table class="table" style="width: 100%; border-collapse: collapse; text-align: left;">
+      <thead>
+        <tr style="background-color: rgba(255, 255, 255, 0.03); border-bottom: 1px solid var(--border);">
+          <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">ID</th>
+          <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">Template Name</th>
+          <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">Versions</th>
+          <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">Latest Content Preview</th>
+          <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">Created</th>
+          <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; text-align: right;">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if templates_list %}
+          {% for t in templates_list %}
+          <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.05);">
+            <td style="padding: 0.85rem 1rem; font-size: 0.9rem; color: var(--text-secondary);">#{{ t.id }}</td>
+            <td style="padding: 0.85rem 1rem; font-weight: 600;">
+              <a href="/templates/{{ t.id }}" style="color: var(--text-primary); text-decoration: none;">{{ t.name }}</a>
+              {% if t.description %}
+                <div style="font-size: 0.8rem; color: var(--text-secondary); font-weight: normal;">{{ t.description }}</div>
+              {% endif %}
+            </td>
+            <td style="padding: 0.85rem 1rem;">
+              <span class="badge" style="background-color: var(--bg-input);">v{{ t.latest_version }} ({{ t.version_count }} total)</span>
+            </td>
+            <td style="padding: 0.85rem 1rem; font-family: monospace; font-size: 0.85rem; color: var(--text-secondary); max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+              {{ t.latest_body }}
+            </td>
+            <td style="padding: 0.85rem 1rem; font-size: 0.85rem; color: var(--text-secondary);">{{ t.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+            <td style="padding: 0.85rem 1rem; text-align: right;">
+              <a href="/templates/{{ t.id }}" class="btn btn-secondary btn-sm" style="width: auto; text-decoration: none;">View History</a>
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="6" style="padding: 3rem; text-align: center; color: var(--text-secondary);">
+              No templates created yet. <a href="/templates/new" style="color: var(--accent);">Create your first template</a>.
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+
+</div>
+{% endblock %}

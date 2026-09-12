@@ -1,0 +1,20 @@
+[Unit]
+Description=WhatsApp Outreach Automation Production Runner Daemon
+After=network.target
+
+[Service]
+Type=simple
+User=outreach
+Group=outreach
+WorkingDirectory=/opt/whatsapp-outreach
+EnvironmentFile=/opt/whatsapp-outreach/.env
+ExecStart=/opt/whatsapp-outreach/.venv/bin/python -m app.cli.main runner start --campaign-id 1
+Restart=always
+RestartSec=10
+KillSignal=SIGTERM
+TimeoutStopSec=30
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

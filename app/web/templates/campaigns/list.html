@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}Campaigns &bull; Integra Outreach Control Center{% endblock %}
+
+{% block content %}
+<div class="container" style="padding-top: 1.5rem; padding-bottom: 2.5rem;">
+
+  <!-- Nav Tabs -->
+  <nav class="nav-tabs">
+    <a href="/dashboard" class="nav-link">Dashboard</a>
+    <a href="/campaigns" class="nav-link active">Campaigns</a>
+    <a href="/queue" class="nav-link">Queue</a>
+    <a href="/contacts" class="nav-link">Contacts</a>
+    <a href="/templates" class="nav-link">Templates</a>
+    <span class="nav-link disabled">Analytics <span class="nav-badge-soon">Coming Soon</span></span>
+    <span class="nav-link disabled">WhatsApp <span class="nav-badge-soon">Coming Soon</span></span>
+    <span class="nav-link disabled">Settings <span class="nav-badge-soon">Coming Soon</span></span>
+  </nav>
+
+  <!-- Header -->
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+    <div>
+      <h1 style="font-size: 1.85rem; font-weight: 800;">Campaigns</h1>
+      <p style="color: var(--text-secondary); font-size: 0.9rem;">Manage outreach campaigns, pacing settings, and lifecycle states</p>
+    </div>
+    <div>
+      <a href="/campaigns/new" class="btn btn-primary" style="width: auto;">+ New Campaign</a>
+    </div>
+  </div>
+
+  <!-- Search & Filter Bar -->
+  <form method="GET" action="/campaigns" class="card" style="padding: 1rem; margin-bottom: 1.5rem; display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end;">
+    <div style="flex: 1; min-width: 220px;">
+      <label style="font-size: 0.8rem; color: var(--text-secondary); display: block; margin-bottom: 0.25rem;">Search Campaign</label>
+      <input type="text" name="search" value="{{ search_query }}" placeholder="Filter by campaign name..." class="form-input" style="width: 100%;">
+    </div>
+    <div style="min-width: 180px;">
+      <label style="font-size: 0.8rem; color: var(--text-secondary); display: block; margin-bottom: 0.25rem;">Status</label>
+      <select name="status" class="form-input" style="width: 100%;">
+        <option value="">All Statuses</option>
+        <option value="DRAFT" {% if selected_status == 'DRAFT' %}selected{% endif %}>DRAFT</option>
+        <option value="SCHEDULED" {% if selected_status == 'SCHEDULED' %}selected{% endif %}>SCHEDULED</option>
+        <option value="RUNNING" {% if selected_status == 'RUNNING' %}selected{% endif %}>RUNNING</option>
+        <option value="PAUSED" {% if selected_status == 'PAUSED' %}selected{% endif %}>PAUSED</option>
+        <option value="COMPLETED" {% if selected_status == 'COMPLETED' %}selected{% endif %}>COMPLETED</option>
+        <option value="CANCELLED" {% if selected_status == 'CANCELLED' %}selected{% endif %}>CANCELLED</option>
+      </select>
+    </div>
+    <div>
+      <button type="submit" class="btn btn-secondary" style="width: auto;">Apply Filter</button>
+      <a href="/campaigns" class="btn btn-secondary" style="width: auto; text-decoration: none;">Reset</a>
+    </div>
+  </form>
+
+  <!-- Campaigns List Table -->
+  <div class="card" style="padding: 0; overflow: hidden;">
+    <table class="table" style="width: 100%; border-collapse: collapse; text-align: left;">
+      <thead>
+        <tr style="background-color: rgba(255, 255, 255, 0.03); border-bottom: 1px solid var(--border);">
+          <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">ID</th>
+          <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">Name</th>
+          <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">Status</th>
+          <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">Contacts</th>
+          <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">Daily Limit</th>
+          <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">Delays (s)</th>
+          <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">Created</th>
+          <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; text-align: right;">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if campaigns %}
+          {% for c in campaigns %}
+          <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.05);">
+            <td style="padding: 0.85rem 1rem; font-size: 0.9rem; color: var(--text-secondary);">#{{ c.id }}</td>
+            <td style="padding: 0.85rem 1rem; font-weight: 600;">
+              <a href="/campaigns/{{ c.id }}" style="color: var(--text-primary); text-decoration: none;">{{ c.name }}</a>
+            </td>
+            <td style="padding: 0.85rem 1rem;">
+              <span class="status-pill status-{{ c.status.lower() }}">{{ c.status }}</span>
+            </td>
+            <td style="padding: 0.85rem 1rem; font-size: 0.9rem;">{{ c.total_contacts }}</td>
+            <td style="padding: 0.85rem 1rem; font-size: 0.9rem;">{{ c.daily_limit }}/day</td>
+            <td style="padding: 0.85rem 1rem; font-size: 0.85rem; color: var(--text-secondary);">{{ c.min_delay_seconds }} - {{ c.max_delay_seconds }}s</td>
+            <td style="padding: 0.85rem 1rem; font-size: 0.85rem; color: var(--text-secondary);">{{ c.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+            <td style="padding: 0.85rem 1rem; text-align: right;">
+              <a href="/campaigns/{{ c.id }}" class="btn btn-secondary btn-sm" style="width: auto; text-decoration: none;">View</a>
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="8" style="padding: 3rem; text-align: center; color: var(--text-secondary);">
+              No campaigns found. <a href="/campaigns/new" style="color: var(--accent);">Create your first campaign</a>.
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,441 @@
+{% extends "base.html" %}
+
+{% block title %}Message #{{ message.id }} &bull; Queue Operations{% endblock %}
+
+{% block content %}
+<div class="container" style="padding-top: 1.5rem; padding-bottom: 2.5rem;">
+
+  <!-- Nav Tabs -->
+  <nav class="nav-tabs">
+    <a href="/dashboard" class="nav-link">Dashboard</a>
+    <a href="/campaigns" class="nav-link">Campaigns</a>
+    <a href="/queue" class="nav-link active">Queue</a>
+    <a href="/contacts" class="nav-link">Contacts</a>
+    <a href="/templates" class="nav-link">Templates</a>
+    <span class="nav-link disabled">Analytics <span class="nav-badge-soon">Coming Soon</span></span>
+    <span class="nav-link disabled">WhatsApp <span class="nav-badge-soon">Coming Soon</span></span>
+    <span class="nav-link disabled">Settings <span class="nav-badge-soon">Coming Soon</span></span>
+  </nav>
+
+  <!-- Back Link -->
+  <div style="margin-bottom: 1.25rem;">
+    <a href="/queue" style="color: var(--text-secondary); text-decoration: none; font-size: 0.9rem;">
+      &larr; Back to Queue
+    </a>
+  </div>
+
+  <!-- UNKNOWN_OUTCOME Prominent Warning Banner -->
+  {% if message.is_unknown_outcome %}
+  <div style="background-color: rgba(245, 158, 11, 0.12); border: 2px solid var(--warning); border-radius: 8px; padding: 1.25rem 1.5rem; margin-bottom: 1.5rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+      <div style="max-width: 750px;">
+        <h3 style="color: var(--warning); font-size: 1.15rem; font-weight: 800; margin: 0;">
+          ⚠️ UNKNOWN OUTCOME — MANUAL VERIFICATION REQUIRED
+        </h3>
+        <p style="color: var(--text-secondary); font-size: 0.9rem; margin: 0.5rem 0 0 0; line-height: 1.5;">
+          An external send action occurred in the browser, but confirmation was interrupted.
+          Automatic blind retry is <strong>prohibited</strong> to prevent duplicate external delivery.
+          Inspect WhatsApp Web manually to verify whether the recipient received the message.
+        </p>
+      </div>
+      {% if message.can_resolve_unknown %}
+      <button onclick="openResolveModal()" class="btn btn-primary" style="background-color: var(--warning); color: #000; font-weight: 700; border: none; width: auto; padding: 0.6rem 1.25rem;">
+        Resolve as Not Sent
+      </button>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Header & Actions -->
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+    <div style="display: flex; align-items: center; gap: 1rem;">
+      <h1 style="font-size: 1.85rem; font-weight: 800; margin: 0;">Message #{{ message.id }}</h1>
+      {% if message.is_unknown_outcome %}
+        <span class="status-pill" style="background-color: rgba(245, 158, 11, 0.2); color: var(--warning); border: 1px solid var(--warning); font-weight: 700;">
+          ⚠️ UNKNOWN_OUTCOME
+        </span>
+      {% elif message.status == 'SENT' %}
+        <span class="status-pill status-active">SENT (SEND_CONFIRMED)</span>
+      {% elif message.status == 'PROCESSING' %}
+        <span class="status-pill" style="background-color: rgba(59, 130, 246, 0.2); color: #60a5fa;">PROCESSING</span>
+      {% elif message.status == 'QUEUED' %}
+        <span class="status-pill" style="background-color: rgba(147, 197, 253, 0.15); color: #93c5fd;">QUEUED</span>
+      {% elif message.status == 'RETRY_PENDING' %}
+        <span class="status-pill" style="background-color: rgba(167, 139, 250, 0.2); color: #a78bfa;">RETRY_PENDING</span>
+      {% elif message.status == 'FAILED' %}
+        <span class="status-pill status-stopped">FAILED</span>
+      {% elif message.status == 'CANCELLED' %}
+        <span class="status-pill" style="background-color: rgba(107, 114, 128, 0.2); color: #9ca3af;">CANCELLED</span>
+      {% elif message.status == 'SKIPPED' %}
+        <span class="status-pill" style="background-color: rgba(107, 114, 128, 0.2); color: #9ca3af;">SKIPPED</span>
+      {% else %}
+        <span class="status-pill status-draft">{{ message.status }}</span>
+      {% endif %}
+    </div>
+
+    <div>
+      {% if message.can_cancel %}
+      <button onclick="openCancelModal()" class="btn btn-secondary" style="color: var(--danger); border-color: var(--danger); width: auto;">
+        Cancel Message
+      </button>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Detail Grid -->
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem;">
+
+    <!-- Identity Card -->
+    <div class="card" style="padding: 1.25rem;">
+      <h3 style="font-size: 1rem; font-weight: 700; margin-top: 0; margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem;">
+        Identity & Relationships
+      </h3>
+      <table style="width: 100%; font-size: 0.9rem; line-height: 1.8;">
+        <tr>
+          <td style="color: var(--text-secondary); width: 40%;">Campaign:</td>
+          <td>
+            <a href="/campaigns/{{ message.campaign_id }}" style="color: var(--primary); text-decoration: none; font-weight: 600;">
+              {{ message.campaign_name or message.campaign_id }}
+            </a>
+          </td>
+        </tr>
+        <tr>
+          <td style="color: var(--text-secondary);">Contact ID:</td>
+          <td><a href="/contacts/{{ message.contact_id }}" style="color: var(--text); text-decoration: none;">#{{ message.contact_id }}</a></td>
+        </tr>
+        <tr>
+          <td style="color: var(--text-secondary);">Contact Name:</td>
+          <td style="font-weight: 600;">{{ message.contact_name or '—' }}</td>
+        </tr>
+        <tr>
+          <td style="color: var(--text-secondary);">Recipient Phone:</td>
+          <td style="font-family: monospace;">{{ message.contact_phone or '—' }}</td>
+        </tr>
+        <tr>
+          <td style="color: var(--text-secondary);">Campaign Contact ID:</td>
+          <td>{{ message.campaign_contact_id or '—' }}</td>
+        </tr>
+        <tr>
+          <td style="color: var(--text-secondary);">Batch ID:</td>
+          <td>{{ message.batch_id or '—' }}</td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- Lifecycle Card -->
+    <div class="card" style="padding: 1.25rem;">
+      <h3 style="font-size: 1rem; font-weight: 700; margin-top: 0; margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem;">
+        Lifecycle & Timestamps
+      </h3>
+      <table style="width: 100%; font-size: 0.9rem; line-height: 1.8;">
+        <tr>
+          <td style="color: var(--text-secondary); width: 40%;">Created:</td>
+          <td>{{ message.created_at.strftime('%Y-%m-%d %H:%M:%S UTC') if message.created_at else '—' }}</td>
+        </tr>
+        <tr>
+          <td style="color: var(--text-secondary);">Queued:</td>
+          <td>{{ message.queued_at.strftime('%Y-%m-%d %H:%M:%S UTC') if message.queued_at else '—' }}</td>
+        </tr>
+        <tr>
+          <td style="color: var(--text-secondary);">Last Attempt:</td>
+          <td>{{ message.last_attempt_at.strftime('%Y-%m-%d %H:%M:%S UTC') if message.last_attempt_at else '—' }}</td>
+        </tr>
+        <tr>
+          <td style="color: var(--text-secondary);">Sent (Confirmed):</td>
+          <td style="color: var(--success); font-weight: 600;">{{ message.sent_at.strftime('%Y-%m-%d %H:%M:%S UTC') if message.sent_at else '—' }}</td>
+        </tr>
+        <tr>
+          <td style="color: var(--text-secondary);">Failed:</td>
+          <td style="color: var(--danger);">{{ message.failed_at.strftime('%Y-%m-%d %H:%M:%S UTC') if message.failed_at else '—' }}</td>
+        </tr>
+        <tr>
+          <td style="color: var(--text-secondary);">Updated:</td>
+          <td>{{ message.updated_at.strftime('%Y-%m-%d %H:%M:%S UTC') if message.updated_at else '—' }}</td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- Retry & Scheduling Card -->
+    <div class="card" style="padding: 1.25rem;">
+      <h3 style="font-size: 1rem; font-weight: 700; margin-top: 0; margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem;">
+        Retry & Scheduling
+      </h3>
+      <table style="width: 100%; font-size: 0.9rem; line-height: 1.8;">
+        <tr>
+          <td style="color: var(--text-secondary); width: 40%;">Delivery Attempts:</td>
+          <td style="font-family: monospace; font-weight: 600;">{{ message.attempt_count }} / {{ message.max_attempts }}</td>
+        </tr>
+        <tr>
+          <td style="color: var(--text-secondary);">Retry Count:</td>
+          <td>{{ message.retry_count }}</td>
+        </tr>
+        <tr>
+          <td style="color: var(--text-secondary);">Next Retry Time:</td>
+          <td style="color: #a78bfa; font-weight: 600;">
+            {{ message.next_retry_at.strftime('%Y-%m-%d %H:%M:%S UTC') if message.next_retry_at else '—' }}
+          </td>
+        </tr>
+        <tr>
+          <td style="color: var(--text-secondary);">Error Classification:</td>
+          <td style="font-weight: 600; color: {% if message.is_unknown_outcome %}var(--warning){% else %}var(--danger){% endif %};">
+            {{ message.error_type or 'None' }}
+          </td>
+        </tr>
+      </table>
+      <div style="margin-top: 0.75rem; padding: 0.6rem; background-color: rgba(255, 255, 255, 0.02); border-radius: 4px; font-size: 0.8rem; color: var(--text-secondary);">
+        ℹ️ Retries are managed autonomously by the Phase 3 scheduler using exponential backoff with jitter. Manual bypass is blocked.
+      </div>
+    </div>
+
+    <!-- Idempotency & Lease Card -->
+    <div class="card" style="padding: 1.25rem;">
+      <h3 style="font-size: 1rem; font-weight: 700; margin-top: 0; margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem;">
+        Idempotency & Worker Lease
+      </h3>
+      <table style="width: 100%; font-size: 0.9rem; line-height: 1.8;">
+        <tr>
+          <td style="color: var(--text-secondary); width: 40%;">Idempotency Key:</td>
+          <td style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">{{ message.idempotency_key }}</td>
+        </tr>
+        <tr>
+          <td style="color: var(--text-secondary);">Sequence Number:</td>
+          <td>{{ message.sequence_number }}</td>
+        </tr>
+        <tr>
+          <td style="color: var(--text-secondary);">Locked By:</td>
+          <td style="font-family: monospace;">{{ message.locked_by or 'None' }}</td>
+        </tr>
+        <tr>
+          <td style="color: var(--text-secondary);">Locked At:</td>
+          <td>{{ message.locked_at.strftime('%Y-%m-%d %H:%M:%S UTC') if message.locked_at else 'None' }}</td>
+        </tr>
+        <tr>
+          <td style="color: var(--text-secondary);">Lease State:</td>
+          <td>
+            {% if message.is_lease_stale %}
+              <span style="color: var(--warning); font-weight: 700;">⚠️ STALE LEASE (>120s)</span>
+            {% elif message.locked_by %}
+              <span style="color: #60a5fa;">Active Worker Lease</span>
+            {% else %}
+              <span style="color: var(--text-secondary);">No Active Lease</span>
+            {% endif %}
+          </td>
+        </tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- Last Error Message (if present) -->
+  {% if message.last_error %}
+  <div class="card" style="padding: 1.25rem; margin-bottom: 1.5rem; border-left: 4px solid {% if message.is_unknown_outcome %}var(--warning){% else %}var(--danger){% endif %};">
+    <div style="font-size: 0.85rem; font-weight: 700; color: {% if message.is_unknown_outcome %}var(--warning){% else %}var(--danger){% endif %}; margin-bottom: 0.5rem;">
+      LAST ERROR LOG
+    </div>
+    <pre style="margin: 0; font-family: monospace; font-size: 0.85rem; color: var(--text); white-space: pre-wrap; word-break: break-word;">{{ message.last_error }}</pre>
+  </div>
+  {% endif %}
+
+  <!-- Rendered Message Content Box -->
+  <div class="card" style="padding: 1.25rem; margin-bottom: 1.5rem;">
+    <h3 style="font-size: 1rem; font-weight: 700; margin-top: 0; margin-bottom: 0.75rem;">
+      Rendered Message Body (Template Output)
+    </h3>
+    <div style="background-color: rgba(255, 255, 255, 0.02); border: 1px solid var(--border); border-radius: 6px; padding: 1rem; font-family: sans-serif; font-size: 0.95rem; line-height: 1.6; white-space: pre-wrap; color: var(--text);">
+      {{ message.rendered_content }}
+    </div>
+  </div>
+
+  <!-- Audit Trail History -->
+  <div class="card" style="padding: 0; overflow: hidden;">
+    <div style="padding: 1rem 1.25rem; border-bottom: 1px solid var(--border);">
+      <h3 style="font-size: 1rem; font-weight: 700; margin: 0;">Audit History for Message #{{ message.id }}</h3>
+    </div>
+    <div style="overflow-x: auto;">
+      <table class="table" style="width: 100%; border-collapse: collapse; text-align: left;">
+        <thead>
+          <tr style="background-color: rgba(255, 255, 255, 0.03); border-bottom: 1px solid var(--border);">
+            <th style="padding: 0.75rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">ID</th>
+            <th style="padding: 0.75rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">Event Type</th>
+            <th style="padding: 0.75rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">Status</th>
+            <th style="padding: 0.75rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">Timestamp</th>
+            <th style="padding: 0.75rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">Details</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if message.audit_logs %}
+            {% for log in message.audit_logs %}
+            <tr style="border-bottom: 1px solid var(--border);">
+              <td style="padding: 0.75rem 1rem; font-size: 0.85rem; font-family: monospace;">#{{ log.id }}</td>
+              <td style="padding: 0.75rem 1rem; font-weight: 600; font-size: 0.85rem;">{{ log.event_type }}</td>
+              <td style="padding: 0.75rem 1rem; font-size: 0.85rem;">{{ log.status or '—' }}</td>
+              <td style="padding: 0.75rem 1rem; font-size: 0.8rem; color: var(--text-secondary);">
+                {{ log.created_at.strftime('%Y-%m-%d %H:%M:%S UTC') if log.created_at else '—' }}
+              </td>
+              <td style="padding: 0.75rem 1rem; font-size: 0.8rem; color: var(--text-secondary); max-width: 350px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                {{ log.result or log.error_message or '—' }}
+              </td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="5" style="padding: 1.5rem; text-align: center; color: var(--text-secondary);">
+                No audit records recorded for this message.
+              </td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- UNKNOWN_OUTCOME Manual Resolution Modal -->
+<div id="resolveModal" class="modal-backdrop" style="display: none;">
+  <div class="modal card" style="max-width: 540px; width: 92%; margin: 7% auto;">
+    <h3 style="margin-top: 0; font-size: 1.25rem; color: var(--warning);">
+      ⚠️ Manual Resolution: Resolve as Not Sent
+    </h3>
+    <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.5;">
+      You are resolving an ambiguous outcome for message #{{ message.id }}.
+      This will reset the message status to <code>QUEUED</code> so it can be claimed again.
+    </p>
+
+    <div style="background-color: rgba(245, 158, 11, 0.1); border: 1px solid var(--warning); border-radius: 6px; padding: 0.85rem; margin-bottom: 1rem; font-size: 0.85rem; color: var(--text);">
+      <strong>DUPLICATE DELIVERY WARNING:</strong>
+      If the recipient actually received this message in WhatsApp, resetting this message will send a duplicate message to the contact.
+    </div>
+
+    <div style="margin-bottom: 1rem;">
+      <label style="display: flex; align-items: flex-start; gap: 0.5rem; font-size: 0.85rem; cursor: pointer;">
+        <input type="checkbox" id="verifyCheck" onchange="checkResolveInputs()" style="margin-top: 0.2rem;">
+        <span>I have manually verified WhatsApp Web chat history and confirmed that the recipient did NOT receive this message.</span>
+      </label>
+    </div>
+
+    <div style="margin-bottom: 1rem;">
+      <label style="font-size: 0.8rem; color: var(--text-secondary); display: block; margin-bottom: 0.25rem;">
+        Explanation Reason (Required)
+      </label>
+      <textarea id="resolveReason" oninput="checkResolveInputs()" rows="3" class="form-input" style="width: 100%; font-size: 0.85rem;" placeholder="e.g., Inspected WhatsApp Web chat at 14:32 UTC. No message exists in the thread."></textarea>
+    </div>
+
+    <div style="margin-bottom: 1.25rem;">
+      <label style="font-size: 0.8rem; color: var(--text-secondary); display: block; margin-bottom: 0.25rem;">
+        Type <code>CONFIRM-NOT-DELIVERED</code> to confirm:
+      </label>
+      <input type="text" id="resolveConfirmation" oninput="checkResolveInputs()" class="form-input" style="width: 100%; font-family: monospace; font-size: 0.9rem;" placeholder="CONFIRM-NOT-DELIVERED">
+    </div>
+
+    <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+      <button onclick="closeResolveModal()" class="btn btn-secondary" style="width: auto;">Cancel</button>
+      <button id="resolveSubmitBtn" onclick="submitResolveUnknown()" class="btn btn-primary" style="background-color: var(--warning); color: #000; font-weight: 700; border: none; width: auto;" disabled>
+        Confirm Resolution
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Cancel Message Modal -->
+<div id="cancelModal" class="modal-backdrop" style="display: none;">
+  <div class="modal card" style="max-width: 440px; width: 90%; margin: 10% auto;">
+    <h3 style="margin-top: 0; font-size: 1.25rem; color: var(--danger);">Cancel Message #{{ message.id }}</h3>
+    <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.5;">
+      Are you sure you want to cancel this message? The message will transition to terminal <code>CANCELLED</code> status and will not be dispatched.
+    </p>
+    <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem;">
+      <button onclick="closeCancelModal()" class="btn btn-secondary" style="width: auto;">Back</button>
+      <button id="cancelSubmitBtn" onclick="submitCancelMessage()" class="btn btn-primary" style="background-color: var(--danger); border-color: var(--danger); width: auto;">
+        Cancel Message
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+const messageId = {{ message.id }};
+
+function openResolveModal() {
+  document.getElementById('resolveModal').style.display = 'block';
+}
+
+function closeResolveModal() {
+  document.getElementById('resolveModal').style.display = 'none';
+}
+
+function checkResolveInputs() {
+  const verified = document.getElementById('verifyCheck').checked;
+  const reason = document.getElementById('resolveReason').value.trim();
+  const phrase = document.getElementById('resolveConfirmation').value.trim();
+  const btn = document.getElementById('resolveSubmitBtn');
+
+  btn.disabled = !(verified && reason.length >= 5 && phrase === 'CONFIRM-NOT-DELIVERED');
+}
+
+async function submitResolveUnknown() {
+  const reason = document.getElementById('resolveReason').value.trim();
+  const confirmation_phrase = document.getElementById('resolveConfirmation').value.trim();
+  const btn = document.getElementById('resolveSubmitBtn');
+
+  btn.disabled = true;
+  btn.textContent = 'Resolving...';
+
+  try {
+    const resp = await apiFetch(`/api/v1/queue/${messageId}/resolve-unknown`, {
+      method: 'POST',
+      body: {
+        reason: reason,
+        confirmation_phrase: confirmation_phrase
+      }
+    });
+    const res = await resp.json();
+    if (res && res.success) {
+      alert('Message successfully resolved and transitioned to QUEUED.');
+      window.location.reload();
+    } else {
+      alert(`Error resolving message: ${res.error ? res.error.message : 'Unknown error'}`);
+      btn.disabled = false;
+      btn.textContent = 'Confirm Resolution';
+    }
+  } catch (err) {
+    alert(`Request failed: ${err.message}`);
+    btn.disabled = false;
+    btn.textContent = 'Confirm Resolution';
+  }
+}
+
+function openCancelModal() {
+  document.getElementById('cancelModal').style.display = 'block';
+}
+
+function closeCancelModal() {
+  document.getElementById('cancelModal').style.display = 'none';
+}
+
+async function submitCancelMessage() {
+  const btn = document.getElementById('cancelSubmitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Cancelling...';
+
+  try {
+    const resp = await apiFetch(`/api/v1/queue/${messageId}/cancel`, {
+      method: 'POST'
+    });
+    const res = await resp.json();
+    if (res && res.success) {
+      alert('Message cancelled successfully.');
+      window.location.reload();
+    } else {
+      alert(`Error cancelling message: ${res.error ? res.error.message : 'Unknown error'}`);
+      btn.disabled = false;
+      btn.textContent = 'Cancel Message';
+    }
+  } catch (err) {
+    alert(`Request failed: ${err.message}`);
+    btn.disabled = false;
+    btn.textContent = 'Cancel Message';
+  }
+}
+</script>
+{% endblock %}
