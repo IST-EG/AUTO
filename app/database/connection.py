@@ -27,7 +27,15 @@ from sqlalchemy.pool import NullPool
 from app.utils.settings import settings
 
 # Normalize DATABASE_URL for SQLAlchemy 2.0 compatibility
-db_url = settings.DATABASE_URL
+db_url = (
+    os.getenv("DATABASE_URL")
+    or os.getenv("POSTGRES_URL")
+    or os.getenv("POSTGRES_PRISMA_URL")
+    or os.getenv("POSTGRES_URL_NON_POOLING")
+    or os.getenv("SUPABASE_DATABASE_URL")
+    or settings.DATABASE_URL
+)
+
 if db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql+psycopg2://", 1)
 elif db_url.startswith("postgresql://") and not db_url.startswith("postgresql+"):
@@ -35,7 +43,6 @@ elif db_url.startswith("postgresql://") and not db_url.startswith("postgresql+")
 
 # In Vercel serverless environment, if running on default sqlite path, adapt to /tmp
 if os.getenv("VERCEL") and db_url.startswith("sqlite:///./data/"):
-    import tempfile
     from pathlib import Path
     Path("/tmp/data").mkdir(parents=True, exist_ok=True)
     db_url = "sqlite:////tmp/data/whatsapp_outreach.db"
@@ -90,12 +97,19 @@ def set_sqlite_pragma(dbapi_conn, connection_record):
 # Declarative base for all ORM models
 Base = declarative_base()
 
-# Session factory
 SessionLocal = sessionmaker(
     autocommit=False,
     autoflush=False,
     bind=engine,
 )
+
+# If running on SQLite (especially in Vercel serverless /tmp), auto-create missing tables
+if db_url.startswith("sqlite"):
+    try:
+        import app.models  # noqa: F401
+        Base.metadata.create_all(bind=engine)
+    except Exception:
+        pass
 
 
 @contextmanager
