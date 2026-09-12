@@ -96,7 +96,8 @@
           window.location.href = '/login';
         }, 1200);
       } else {
-        const errorMsg = data.error?.message || 'Failed to initialize system.';
+        const detailText = data.error?.details ? ` - ${data.error.details}` : '';
+        const errorMsg = (data.error?.message || 'Failed to initialize system.') + detailText;
         _showAlert('alert-box', errorMsg, 'error');
         btn.disabled = false;
         btn.textContent = 'Create OWNER Account';

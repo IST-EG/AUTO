@@ -26,13 +26,27 @@ from sqlalchemy.pool import NullPool
 
 from app.utils.settings import settings
 
+# Normalize DATABASE_URL for SQLAlchemy 2.0 compatibility
+db_url = settings.DATABASE_URL
+if db_url.startswith("postgres://"):
+    db_url = db_url.replace("postgres://", "postgresql+psycopg2://", 1)
+elif db_url.startswith("postgresql://") and not db_url.startswith("postgresql+"):
+    db_url = db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+
+# In Vercel serverless environment, if running on default sqlite path, adapt to /tmp
+if os.getenv("VERCEL") and db_url.startswith("sqlite:///./data/"):
+    import tempfile
+    from pathlib import Path
+    Path("/tmp/data").mkdir(parents=True, exist_ok=True)
+    db_url = "sqlite:////tmp/data/whatsapp_outreach.db"
+
 # Configure engine arguments based on database dialect
 _connect_args = {}
 _engine_kwargs = {
     "echo": False,
 }
 
-if settings.DATABASE_URL.startswith("sqlite"):
+if db_url.startswith("sqlite"):
     _connect_args["check_same_thread"] = False
     _engine_kwargs["connect_args"] = _connect_args
 else:
@@ -41,6 +55,8 @@ else:
     # 1. psycopg2 does NOT use server-side prepared statements (binds parameters client-side via %s).
     # 2. SQLAlchemy transaction boundaries use standard COMMIT/ROLLBACK without session state leakage.
     # 3. No session-level SET statements or temp tables are utilized.
+    _connect_args["connect_timeout"] = 10
+    _engine_kwargs["connect_args"] = _connect_args
     if os.getenv("VERCEL"):
         # In serverless runtimes, NullPool prevents frozen lambdas from exhausting pooler connection slots.
         _engine_kwargs["poolclass"] = NullPool
@@ -52,7 +68,7 @@ else:
         _engine_kwargs["pool_pre_ping"] = settings.DB_POOL_PRE_PING
 
 engine = create_engine(
-    settings.DATABASE_URL,
+    db_url,
     **_engine_kwargs
 )
 

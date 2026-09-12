@@ -30,13 +30,19 @@ def bootstrap_owner(
     Fails with 409 Conflict if setup was already completed or concurrently created.
     """
     client_ip = request.client.host if request.client else "127.0.0.1"
-    success, message, owner_dict = BootstrapService.bootstrap_owner(
-        db=db,
-        username=payload.username,
-        email=payload.email,
-        password=payload.password,
-        ip_address=client_ip
-    )
+    try:
+        success, message, owner_dict = BootstrapService.bootstrap_owner(
+            db=db,
+            username=payload.username,
+            email=payload.email,
+            password=payload.password,
+            ip_address=client_ip
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Bootstrap service error ({type(exc).__name__}): {str(exc)}"
+        )
 
     if not success:
         if "already" in message.lower() or "conflict" in message.lower():

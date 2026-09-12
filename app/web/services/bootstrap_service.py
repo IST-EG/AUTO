@@ -76,14 +76,14 @@ class BootstrapService:
         if not valid_pwd:
             return False, pwd_msg, {}
 
-        # 2. Check if setup is already complete
-        if not cls.is_setup_available(db):
-            return False, "First-run setup has already been completed.", {}
-
-        now = datetime.now(timezone.utc)
-        owner_id = str(uuid.uuid4())
-
         try:
+            # 2. Check if setup is already complete
+            if not cls.is_setup_available(db):
+                return False, "First-run setup has already been completed.", {}
+
+            now = datetime.now(timezone.utc)
+            owner_id = str(uuid.uuid4())
+
             # 3. Insert sentinel lock into app_settings (atomic uniqueness enforcement)
             sentinel = AppSetting(
                 key=cls.LOCK_SETTING_KEY,
@@ -137,8 +137,14 @@ class BootstrapService:
             }
 
         except IntegrityError:
-            db.rollback()
+            try:
+                db.rollback()
+            except Exception:
+                pass
             return False, "First-run setup conflict: an OWNER account was already created concurrently.", {}
         except Exception as ex:
-            db.rollback()
-            return False, f"Setup failed: {str(ex)}", {}
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            return False, f"Setup failed ({type(ex).__name__}): {str(ex)}", {}

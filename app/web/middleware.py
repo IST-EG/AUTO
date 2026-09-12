@@ -120,11 +120,16 @@ async def generic_exception_handler(request: Request, exc: Exception) -> Respons
         exc_info=True
     )
 
+    is_setup_or_debug = web_settings.DEBUG or ("/setup" in request.url.path)
+    err_msg = f"Server exception ({type(exc).__name__}): {str(exc)}" if is_setup_or_debug else "An unexpected server error occurred. Please contact support."
+    err_details = str(exc) if is_setup_or_debug else None
+
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content=APIResponse.fail(
             code="INTERNAL_SERVER_ERROR",
-            message="An unexpected server error occurred. Please contact support.",
+            message=err_msg,
+            details=err_details,
             meta={"correlation_id": correlation_id}
         ).model_dump()
     )
