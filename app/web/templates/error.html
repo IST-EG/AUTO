@@ -4,10 +4,11 @@
 
 {% block content %}
 <div class="auth-wrapper">
-  <div class="card auth-card" style="text-align: center;">
-    <h1 class="card-title" style="color: var(--accent-red);">{{ error_code or "Error" }}</h1>
-    <p class="card-subtitle">{{ error_message or "An unexpected condition was encountered." }}</p>
-    <a href="/" class="btn btn-secondary">Return to Home</a>
+  <div class="auth-card" style="text-align: center;">
+    <div style="font-size: 36px; margin-bottom: var(--space-3); color: var(--ids-danger);">⚠️</div>
+    <h1 class="auth-title" style="color: var(--ids-danger);">{{ error_code or "Error" }}</h1>
+    <p class="auth-subtitle" style="margin-bottom: var(--space-6);">{{ error_message or "An unexpected condition was encountered." }}</p>
+    <a href="/" class="btn btn-secondary" style="width: 100%;">Return to Home</a>
   </div>
 </div>
 {% endblock %}

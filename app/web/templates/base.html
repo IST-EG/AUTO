@@ -8,31 +8,204 @@
   <script src="/static/js/app.js"></script>
 </head>
 <body>
-  <header>
-    <div class="container header-content">
-      <a href="/" class="brand">
-        Integra Outreach <span class="badge">Control Center</span>
-      </a>
-      {% if current_user %}
-      <div style="display: flex; align-items: center; gap: 1rem;">
-        <span style="font-size: 0.9rem; color: var(--text-secondary);">
-          {{ current_user.username }}
-          <span class="role-badge {{ current_user.role }}">{{ current_user.role }}</span>
-        </span>
-        <a href="/logout" class="btn btn-secondary btn-sm">Logout</a>
+{% if current_user %}
+  <div class="app-shell">
+    <!-- IDS PERSISTENT SIDEBAR -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <a href="/dashboard" class="sidebar-brand">
+          <div class="sidebar-logo-glyph">❖</div>
+          <div class="sidebar-brand-text">
+            <span class="sidebar-brand-title">Integra</span>
+            <span class="sidebar-brand-subtitle">Control Center</span>
+          </div>
+        </a>
       </div>
-      {% endif %}
-    </div>
-  </header>
 
-  <main style="flex: 1; display: flex; flex-direction: column;">
+      <nav class="sidebar-nav">
+        <!-- OVERVIEW -->
+        <div class="sidebar-group">
+          <div class="sidebar-group-title">Overview</div>
+          <a href="/dashboard" class="sidebar-link {% if active_nav == 'dashboard' or (request and request.url.path.startswith('/dashboard')) %}active{% endif %}">
+            <span class="sidebar-link-content">
+              <span class="sidebar-link-icon">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="3" width="7" height="7"></rect>
+                  <rect x="14" y="3" width="7" height="7"></rect>
+                  <rect x="14" y="14" width="7" height="7"></rect>
+                  <rect x="3" y="14" width="7" height="7"></rect>
+                </svg>
+              </span>
+              <span>Dashboard</span>
+            </span>
+          </a>
+        </div>
+
+        <!-- OUTREACH -->
+        <div class="sidebar-group">
+          <div class="sidebar-group-title">Outreach</div>
+          <a href="/campaigns" class="sidebar-link {% if active_nav == 'campaigns' or (request and request.url.path.startswith('/campaigns')) %}active{% endif %}">
+            <span class="sidebar-link-content">
+              <span class="sidebar-link-icon">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+                  <polyline points="2 17 12 22 22 17"></polyline>
+                  <polyline points="2 12 12 17 22 12"></polyline>
+                </svg>
+              </span>
+              <span>Campaigns</span>
+            </span>
+          </a>
+          <a href="/contacts" class="sidebar-link {% if active_nav == 'contacts' or (request and request.url.path.startswith('/contacts')) %}active{% endif %}">
+            <span class="sidebar-link-content">
+              <span class="sidebar-link-icon">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="9" cy="7" r="4"></circle>
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                </svg>
+              </span>
+              <span>Contacts</span>
+            </span>
+          </a>
+          <a href="/templates" class="sidebar-link {% if active_nav == 'templates' or (request and request.url.path.startswith('/templates')) %}active{% endif %}">
+            <span class="sidebar-link-content">
+              <span class="sidebar-link-icon">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                  <line x1="16" y1="13" x2="8" y2="13"></line>
+                  <line x1="16" y1="17" x2="8" y2="17"></line>
+                  <polyline points="10 9 9 9 8 9"></polyline>
+                </svg>
+              </span>
+              <span>Templates</span>
+            </span>
+          </a>
+          <a href="/queue" class="sidebar-link {% if active_nav == 'queue' or (request and request.url.path.startswith('/queue')) %}active{% endif %}">
+            <span class="sidebar-link-content">
+              <span class="sidebar-link-icon">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="2" y="4" width="20" height="16" rx="2"></rect>
+                  <path d="M6 8h12"></path>
+                  <path d="M6 12h12"></path>
+                  <path d="M6 16h8"></path>
+                </svg>
+              </span>
+              <span>Queue</span>
+            </span>
+          </a>
+        </div>
+
+        <!-- INSIGHTS (Future Scope) -->
+        <div class="sidebar-group">
+          <div class="sidebar-group-title">Insights</div>
+          <span class="sidebar-link disabled" title="Phase 7.5 Coming Soon">
+            <span class="sidebar-link-content">
+              <span class="sidebar-link-icon">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="18" y1="20" x2="18" y2="10"></line>
+                  <line x1="12" y1="20" x2="12" y2="4"></line>
+                  <line x1="6" y1="20" x2="6" y2="14"></line>
+                </svg>
+              </span>
+              <span>Analytics</span>
+            </span>
+            <span class="sidebar-badge">Soon</span>
+          </span>
+        </div>
+
+        <!-- SYSTEM (Future Scope) -->
+        <div class="sidebar-group">
+          <div class="sidebar-group-title">System</div>
+          <span class="sidebar-link disabled" title="Future Release">
+            <span class="sidebar-link-content">
+              <span class="sidebar-link-icon">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                </svg>
+              </span>
+              <span>WhatsApp</span>
+            </span>
+            <span class="sidebar-badge">Soon</span>
+          </span>
+          <span class="sidebar-link disabled" title="Future Release">
+            <span class="sidebar-link-content">
+              <span class="sidebar-link-icon">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="3"></circle>
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                </svg>
+              </span>
+              <span>Settings</span>
+            </span>
+            <span class="sidebar-badge">Soon</span>
+          </span>
+        </div>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="sidebar-user-card">
+          <div class="sidebar-user-info">
+            <span class="sidebar-user-name">{{ current_user.username }}</span>
+            <span class="sidebar-user-role">{{ current_user.role }}</span>
+          </div>
+          <a href="/logout" class="sidebar-logout-btn" title="Sign out">Logout</a>
+        </div>
+      </div>
+    </aside>
+
+    <div class="sidebar-overlay"></div>
+
+    <!-- MAIN WORKSPACE WRAPPER -->
+    <div class="main-wrapper">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button id="mobile-drawer-toggle" class="mobile-menu-toggle" aria-label="Toggle navigation">
+            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2">
+              <line x1="3" y1="12" x2="21" y2="12"></line>
+              <line x1="3" y1="6" x2="21" y2="6"></line>
+              <line x1="3" y1="18" x2="21" y2="18"></line>
+            </svg>
+          </button>
+          <div class="topbar-breadcrumbs">
+            {% block breadcrumbs %}
+            <span class="topbar-breadcrumb-item">Integra</span>
+            <span class="topbar-breadcrumb-sep">/</span>
+            <span class="topbar-breadcrumb-item active">Operational Control Center</span>
+            {% endblock %}
+          </div>
+        </div>
+
+        <div class="topbar-right">
+          {% block topbar_actions %}{% endblock %}
+          <span style="font-size: 12px; color: var(--ids-text-secondary); display: flex; align-items: center; gap: 8px;">
+            <span style="font-weight: 500;">{{ current_user.username }}</span>
+            <span class="role-badge {{ current_user.role }}">{{ current_user.role }}</span>
+          </span>
+        </div>
+      </header>
+
+      <main class="content-canvas">
+{% else %}
+  <main style="min-height: 100vh; display: flex; flex-direction: column;">
+{% endif %}
+
     {% block content %}{% endblock %}
-  </main>
 
-  <footer>
-    <div class="container">
-      &copy; 2026 Integra Outreach Automation &bull; auto.integra-ist.com &bull; Phase 7.1 Foundation
+{% if current_user %}
+      </main>
+
+      <footer>
+        <div style="text-align: center; padding: 1.5rem 0; color: var(--ids-text-muted); font-size: 11px; border-top: 1px solid var(--ids-border); margin-top: auto;">
+          &copy; 2026 Integra Outreach Automation &bull; auto.integra-ist.com &bull; Operational Control Center
+        </div>
+      </footer>
     </div>
-  </footer>
+  </div>
+{% else %}
+  </main>
+{% endif %}
 </body>
 </html>

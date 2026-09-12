@@ -2,60 +2,80 @@
 
 {% block title %}New Template &bull; Integra Outreach Control Center{% endblock %}
 
-{% block content %}
-<div class="container" style="padding-top: 1.5rem; padding-bottom: 2.5rem; max-width: 800px;">
+{% block breadcrumbs %}
+<span class="topbar-breadcrumb-item">Outreach</span>
+<span class="topbar-breadcrumb-sep">/</span>
+<a href="/templates" class="topbar-breadcrumb-item">Templates</a>
+<span class="topbar-breadcrumb-sep">/</span>
+<span class="topbar-breadcrumb-item active">New</span>
+{% endblock %}
 
-  <!-- Breadcrumb -->
-  <div style="margin-bottom: 1rem;">
-    <a href="/templates" style="color: var(--text-secondary); text-decoration: none; font-size: 0.9rem;">&larr; Back to Templates</a>
+{% block content %}
+<div style="max-width: 840px; margin: 0 auto; padding-bottom: 2rem;">
+
+  <div style="margin-bottom: var(--space-4);">
+    <a href="/templates" class="btn btn-outline btn-sm">&larr; Back to Templates</a>
   </div>
 
-  <div class="card" style="padding: 2rem;">
-    <h1 style="font-size: 1.5rem; font-weight: 700; margin-bottom: 0.5rem;">Create Message Template</h1>
-    <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">
-      Define a reusable message template. Templates use immutable versioning; this will create Version 1.
-    </p>
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <h1 class="card-title" style="font-size: var(--text-xl);">Create Message Template</h1>
+        <p class="card-subtitle">Define a reusable outreach message. Templates use immutable versioning; this will publish Version 1.</p>
+      </div>
+    </div>
 
-    <div id="template-alert" class="alert" style="display: none; margin-bottom: 1.5rem;"></div>
+    <div id="template-alert" class="alert"></div>
 
     <form id="create-template-form">
       <div class="form-group">
         <label for="tmpl-name">Template Name *</label>
-        <input type="text" id="tmpl-name" class="form-input" required placeholder="e.g. Intro Pitch B2B">
+        <input type="text" id="tmpl-name" class="form-input" required placeholder="e.g. Executive Introduction B2B">
       </div>
 
       <div class="form-group">
         <label for="tmpl-desc">Description (Optional)</label>
-        <input type="text" id="tmpl-desc" class="form-input" placeholder="Brief note on when to use this template">
+        <input type="text" id="tmpl-desc" class="form-input" placeholder="Brief note on target audience or purpose">
       </div>
 
       <div class="form-group">
-        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.35rem;">
+        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;">
           <label for="tmpl-body">Message Body *</label>
-          <span style="font-size: 0.8rem; color: var(--text-secondary);">
-            Allowed variables: <code>{{ '{{name}}' }}</code>, <code>{{ '{{company}}' }}</code>, <code>{{ '{{city}}' }}</code>, <code>{{ '{{campaign}}' }}</code>
+          <span style="font-size: 11px; color: var(--ids-text-muted);">
+            Supported variables: <code>{{ '{{name}}' }}</code>, <code>{{ '{{company}}' }}</code>, <code>{{ '{{city}}' }}</code>, <code>{{ '{{campaign}}' }}</code>
           </span>
         </div>
-        <textarea id="tmpl-body" class="form-input" rows="6" required placeholder="Hello {{name}}, I hope you're having a productive week at {{company}}..."></textarea>
+        <textarea id="tmpl-body" class="form-input" rows="6" required placeholder="Hello {{name}}, I noticed {{company}} is expanding operations in {{city}}..."></textarea>
       </div>
 
-      <!-- Live Validation & Preview Panel -->
-      <div class="card" style="background-color: var(--bg-main); margin-top: 1rem; padding: 1rem; border: 1px dashed var(--border);">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-          <span style="font-size: 0.85rem; font-weight: 600;">Template Preview (Live Rendering)</span>
-          <button type="button" onclick="validateAndPreview()" class="btn btn-secondary btn-sm" style="width: auto;">Refresh Preview</button>
+      <!-- Live Validation & WhatsApp Visual Preview Panel -->
+      <div style="margin-top: var(--space-4);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-2);">
+          <span style="font-size: 12px; font-weight: 600; color: var(--ids-text-secondary);">WhatsApp Visual Preview (Sample Render)</span>
+          <button type="button" onclick="validateAndPreview()" class="btn btn-secondary btn-sm">Refresh Preview</button>
         </div>
-        <div id="preview-output" style="font-family: monospace; font-size: 0.85rem; color: var(--text-secondary); white-space: pre-wrap; min-height: 48px;">
-          Type your template above and click "Refresh Preview" to inspect sample rendering.
+
+        <div class="whatsapp-preview-card">
+          <div class="whatsapp-bubble-outgoing">
+            <div id="preview-output" style="white-space: pre-wrap;">Type your template copy above and click "Refresh Preview" to inspect sample variable rendering.</div>
+            <div class="whatsapp-bubble-meta">
+              <span>10:42 AM</span>
+              <span class="whatsapp-neutral-check">✓ SENT</span>
+            </div>
+          </div>
+          <div class="whatsapp-preview-disclaimer">
+            Visual message preview only — not a delivery or read receipt. System confirms send operations via SEND_CONFIRMED criteria only.
+          </div>
         </div>
       </div>
 
-      <div style="display: flex; justify-content: flex-end; gap: 1rem; margin-top: 2rem;">
-        <a href="/templates" class="btn btn-secondary" style="width: auto; text-decoration: none;">Cancel</a>
-        <button type="submit" id="btn-submit-template" class="btn btn-primary" style="width: auto;">Save Template (v1)</button>
+      <div style="display: flex; justify-content: flex-end; gap: var(--space-3); margin-top: var(--space-6); border-top: 1px solid var(--ids-border); padding-top: var(--space-4);">
+        <a href="/templates" class="btn btn-secondary">Cancel</a>
+        <button type="submit" id="btn-submit-template" class="btn btn-primary">Save Template (v1)</button>
       </div>
     </form>
   </div>
+
 </div>
 
 <script>
@@ -68,24 +88,20 @@ async function validateAndPreview() {
   }
 
   try {
-    const res = await fetch('/api/v1/templates/preview', {
+    const res = await apiFetch('/api/v1/templates/preview', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRF-Token': getCsrfToken(),
-      },
-      body: JSON.stringify({ body: body })
+      body: { body: body }
     });
     const result = await res.json();
     if (res.ok && result.success) {
-      previewDiv.style.color = 'var(--text-primary)';
+      previewDiv.style.color = '#E9EDEF';
       previewDiv.textContent = result.data.rendered_text;
     } else {
-      previewDiv.style.color = 'var(--accent-red)';
+      previewDiv.style.color = '#FCA5A5';
       previewDiv.textContent = 'Validation Error: ' + (result.error?.message || result.detail || 'Invalid variables found.');
     }
   } catch (err) {
-    previewDiv.style.color = 'var(--accent-red)';
+    previewDiv.style.color = '#FCA5A5';
     previewDiv.textContent = 'Failed to validate template.';
   }
 }
@@ -104,31 +120,28 @@ document.getElementById('create-template-form').addEventListener('submit', async
   btn.textContent = 'Saving...';
 
   try {
-    const res = await fetch('/api/v1/templates', {
+    const res = await apiFetch('/api/v1/templates', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRF-Token': getCsrfToken(),
-      },
-      body: JSON.stringify({
+      body: {
         name: name,
         description: description || null,
         body: body
-      })
+      }
     });
     const result = await res.json();
+
     if (res.ok && result.success) {
       window.location.href = `/templates/${result.data.id}`;
     } else {
       alertBox.className = 'alert alert-danger';
-      alertBox.textContent = result.error?.message || result.detail || 'Failed to create template.';
+      alertBox.textContent = result.error?.message || result.detail || 'Failed to save template.';
       alertBox.style.display = 'block';
       btn.disabled = false;
       btn.textContent = 'Save Template (v1)';
     }
   } catch (err) {
     alertBox.className = 'alert alert-danger';
-    alertBox.textContent = 'Network or server error.';
+    alertBox.textContent = 'Network or server error creating template.';
     alertBox.style.display = 'block';
     btn.disabled = false;
     btn.textContent = 'Save Template (v1)';

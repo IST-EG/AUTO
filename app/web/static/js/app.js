@@ -1,4 +1,5 @@
-// Client JavaScript for Web Control Center
+// Client JavaScript for Integra Outreach Control Center (IDS)
+
 function getCookie(name) {
   const value = `; ${document.cookie}`;
   const parts = value.split(`; ${name}=`);
@@ -52,7 +53,7 @@ function closeModal(id) {
   if (modal) {
     modal.classList.remove('show');
     // Clear errors inside modal
-    const errs = modal.querySelectorAll('.alert-error');
+    const errs = modal.querySelectorAll('.alert-error, .alert-danger');
     errs.forEach(e => { e.style.display = 'none'; e.textContent = ''; });
   }
 }
@@ -71,7 +72,7 @@ document.addEventListener('click', (e) => {
 });
 
 /* ========================================================================= */
-/* DASHBOARD REAL-TIME TELEMETRY & CONTROLS                                  */
+/* DASHBOARD REAL-TIME TELEMETRY & REMOTE SUPERVISION                        */
 /* ========================================================================= */
 
 let sseEventSource = null;
@@ -132,16 +133,17 @@ function updateDashboard(data) {
   }
 
   if (data.emergency_stop) {
+    const isAct = data.emergency_stop.is_active;
     const estopEl = document.getElementById('subsystem-estop');
     if (estopEl) {
-      estopEl.textContent = data.emergency_stop.is_active ? 'ARMED' : 'DISARMED';
-      estopEl.className = `status-pill status-${data.emergency_stop.is_active ? 'armed' : 'disarmed'}`;
+      estopEl.textContent = isAct ? 'ACTIVE' : 'INACTIVE';
+      estopEl.className = `status-pill status-${isAct ? 'unhealthy' : 'healthy'}`;
     }
 
     const ctrlEstopState = document.getElementById('ctrl-estop-state');
     if (ctrlEstopState) {
-      ctrlEstopState.textContent = data.emergency_stop.is_active ? 'ARMED' : 'DISARMED';
-      ctrlEstopState.className = `status-pill status-${data.emergency_stop.is_active ? 'armed' : 'disarmed'}`;
+      ctrlEstopState.textContent = isAct ? 'ACTIVE (Dispatch Blocked)' : 'INACTIVE (Dispatch Allowed)';
+      ctrlEstopState.className = `status-pill status-${isAct ? 'unhealthy' : 'healthy'}`;
     }
     const ctrlEstopTrig = document.getElementById('ctrl-estop-triggered');
     if (ctrlEstopTrig) {
@@ -155,11 +157,11 @@ function updateDashboard(data) {
     const role = window.CURRENT_USER_ROLE || '';
     const btnEstop = document.getElementById('btn-emergency-stop');
     if (btnEstop) {
-      btnEstop.disabled = data.emergency_stop.is_active || role === 'VIEWER';
+      btnEstop.disabled = isAct || role === 'VIEWER';
     }
     const btnResume = document.getElementById('btn-emergency-resume');
     if (btnResume) {
-      btnResume.disabled = !data.emergency_stop.is_active || !['ADMIN', 'OWNER'].includes(role);
+      btnResume.disabled = !isAct || !['ADMIN', 'OWNER'].includes(role);
     }
   }
 
@@ -189,7 +191,7 @@ function updateDashboard(data) {
     }
     const qSubEl = document.getElementById('kpi-queue-subtext');
     if (qSubEl) {
-      qSubEl.textContent = `${data.queue.queued || 0} pending, ${data.queue.processing || 0} claimed`;
+      qSubEl.textContent = `${data.queue.queued || 0} pending, ${data.queue.processing || 0} active leases`;
     }
 
     const updateQ = (id, val) => {
@@ -204,7 +206,7 @@ function updateDashboard(data) {
     updateQ('qc-unknown-outcome', data.queue.unknown_outcome);
   }
 
-  // KPI 4 & Runner Control
+  // KPI 4 & Remote Runner Supervision
   if (data.runner) {
     const rStatEl = document.getElementById('kpi-runner-status');
     if (rStatEl) {
@@ -219,12 +221,12 @@ function updateDashboard(data) {
     const ctrlState = document.getElementById('ctrl-runner-state');
     if (ctrlState) ctrlState.textContent = data.runner.state;
     const ctrlCamp = document.getElementById('ctrl-runner-campaign');
-    if (ctrlCamp) ctrlCamp.textContent = data.runner.campaign_id || 'None';
+    if (ctrlCamp) ctrlCamp.textContent = data.runner.campaign_id ? `#${data.runner.campaign_id}` : 'None';
     const ctrlHb = document.getElementById('ctrl-runner-heartbeat');
     if (ctrlHb) {
       ctrlHb.textContent = data.runner.heartbeat_age_seconds !== null && data.runner.heartbeat_age_seconds !== undefined
         ? `${data.runner.heartbeat_age_seconds}s ago`
-        : 'None';
+        : 'Offline';
     }
 
     const role = window.CURRENT_USER_ROLE || '';
@@ -250,7 +252,7 @@ function updateDashboard(data) {
       statEl.className = `status-pill status-${ac.status.toLowerCase()}`;
     }
     const idEl = document.getElementById('campaign-id');
-    if (idEl) idEl.textContent = ac.id;
+    if (idEl) idEl.textContent = `#${ac.id}`;
 
     const pct = ac.completion_percentage || 0.0;
     const barEl = document.getElementById('campaign-progress-bar');
@@ -271,16 +273,17 @@ function updateDashboard(data) {
     const badgeEl = document.getElementById('alerts-count-badge');
     if (badgeEl) {
       badgeEl.textContent = `${data.alerts.length} active`;
-      badgeEl.style.backgroundColor = data.alerts.length > 0 ? 'var(--accent-amber)' : 'var(--accent-green)';
+      badgeEl.style.backgroundColor = data.alerts.length > 0 ? 'var(--ids-warning)' : 'var(--ids-success)';
+      badgeEl.style.color = '#000000';
     }
     const alertsContainer = document.getElementById('alerts-container');
     if (alertsContainer) {
       if (data.alerts.length === 0) {
-        alertsContainer.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.9rem; text-align: center; padding: 1rem 0;">All systems operational. No active alerts.</div>';
+        alertsContainer.innerHTML = '<div style="color: var(--ids-text-muted); font-size: 13px; text-align: center; padding: 1rem 0;">All subsystems operational. No active alerts.</div>';
       } else {
         alertsContainer.innerHTML = data.alerts.map(a => `
           <div class="alert-item ${a.severity}">
-            <div><strong>[${a.severity}]</strong> ${a.message} <span style="font-size: 0.75rem; opacity: 0.8;">(${a.id})</span></div>
+            <div><strong>[${a.severity}]</strong> ${a.message} <span style="font-size: 11px; opacity: 0.8; font-family: var(--font-mono);">(${a.id})</span></div>
           </div>
         `).join('');
       }
@@ -362,6 +365,23 @@ function initTelemetry() {
 
 // Setup Event Handlers when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
+  // Mobile drawer controls
+  const toggleBtn = document.getElementById('mobile-drawer-toggle');
+  const sidebar = document.querySelector('.sidebar');
+  const overlay = document.querySelector('.sidebar-overlay');
+
+  if (toggleBtn && sidebar && overlay) {
+    toggleBtn.addEventListener('click', () => {
+      sidebar.classList.toggle('open');
+      overlay.classList.toggle('open');
+    });
+
+    overlay.addEventListener('click', () => {
+      sidebar.classList.remove('open');
+      overlay.classList.remove('open');
+    });
+  }
+
   // Initialize telemetry if on dashboard
   if (document.getElementById('telemetry-indicator')) {
     initTelemetry();
@@ -403,7 +423,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const data = await res.json();
         if (res.ok) {
           closeModal('modal-start-runner');
-          showAlert('dashboard-global-alert', `Runner started successfully (PID: ${data.pid}).`, 'success');
+          showAlert('dashboard-global-alert', `Runner start requested successfully (PID: ${data.pid || 'Remote Desired State Set'}).`, 'success');
           await fetchDashboardSnapshot();
         } else {
           showAlert('start-runner-error', data.detail || 'Failed to start runner.', 'error');
@@ -434,7 +454,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const data = await res.json();
         if (res.ok) {
           closeModal('modal-stop-runner');
-          showAlert('dashboard-global-alert', 'Runner stopped successfully.', 'success');
+          showAlert('dashboard-global-alert', 'Runner graceful stop requested successfully.', 'success');
           await fetchDashboardSnapshot();
         } else {
           showAlert('stop-runner-error', data.detail || 'Failed to stop runner.', 'error');
@@ -459,7 +479,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const reasonInput = document.getElementById('estop-reason');
       const reason = reasonInput ? reasonInput.value.trim() : '';
       if (!reason) {
-        showAlert('emergency-stop-error', 'Reason is required for emergency stop.', 'error');
+        showAlert('emergency-stop-error', 'Reason is required to activate emergency stop.', 'error');
         return;
       }
 
@@ -473,7 +493,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const data = await res.json();
         if (res.ok) {
           closeModal('modal-emergency-stop');
-          showAlert('dashboard-global-alert', 'EMERGENCY STOP ARMED. All queue dispatch halted.', 'error');
+          showAlert('dashboard-global-alert', 'EMERGENCY STOP ACTIVE — All queue dispatch claims blocked.', 'error');
           await fetchDashboardSnapshot();
         } else {
           showAlert('emergency-stop-error', data.detail || 'Failed to trigger emergency stop.', 'error');
@@ -497,7 +517,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const reasonInput = document.getElementById('resume-reason');
       const reason = reasonInput ? reasonInput.value.trim() : '';
       if (!reason) {
-        showAlert('emergency-resume-error', 'Reason is required to resume operations.', 'error');
+        showAlert('emergency-resume-error', 'Reason is required to resume dispatch operations.', 'error');
         return;
       }
 
@@ -511,7 +531,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const data = await res.json();
         if (res.ok) {
           closeModal('modal-emergency-resume');
-          showAlert('dashboard-global-alert', 'Operations resumed successfully. Emergency stop disarmed.', 'success');
+          showAlert('dashboard-global-alert', 'Dispatch operations resumed successfully. Emergency stop inactive.', 'success');
           await fetchDashboardSnapshot();
         } else {
           showAlert('emergency-resume-error', data.detail || 'Failed to resume operations.', 'error');

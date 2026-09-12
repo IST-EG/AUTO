@@ -2,75 +2,106 @@
 
 {% block title %}{{ template.name }} &bull; Integra Outreach Control Center{% endblock %}
 
+{% block breadcrumbs %}
+<span class="topbar-breadcrumb-item">Outreach</span>
+<span class="topbar-breadcrumb-sep">/</span>
+<a href="/templates" class="topbar-breadcrumb-item">Templates</a>
+<span class="topbar-breadcrumb-sep">/</span>
+<span class="topbar-breadcrumb-item active">{{ template.name }}</span>
+{% endblock %}
+
 {% block content %}
-<div class="container" style="padding-top: 1.5rem; padding-bottom: 2.5rem;">
+<div style="padding-bottom: 2rem;">
 
-  <!-- Breadcrumb -->
-  <div style="margin-bottom: 1rem;">
-    <a href="/templates" style="color: var(--text-secondary); text-decoration: none; font-size: 0.9rem;">&larr; Back to Templates</a>
+  <div style="margin-bottom: var(--space-4);">
+    <a href="/templates" class="btn btn-outline btn-sm">&larr; Back to Templates</a>
   </div>
 
-  <!-- Header -->
-  <div style="margin-bottom: 1.5rem;">
-    <div style="display: flex; align-items: center; gap: 0.75rem;">
-      <h1 style="font-size: 1.85rem; font-weight: 800;">{{ template.name }}</h1>
-      <span class="badge" style="background-color: var(--accent);">{{ template.versions|length }} Versions</span>
-    </div>
-    {% if template.description %}
-      <p style="color: var(--text-secondary); font-size: 0.95rem; margin-top: 0.35rem;">{{ template.description }}</p>
-    {% endif %}
-  </div>
-
-  <!-- Immutability Guarantee Callout -->
-  <div class="card" style="padding: 0.75rem 1rem; margin-bottom: 1.5rem; border-left: 4px solid var(--accent-green); background-color: rgba(16, 185, 129, 0.08);">
-    <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0;">
-      <strong style="color: var(--accent-green);">Immutable Versioning:</strong>
-      Template versions are write-once and append-only. Existing versions cannot be modified or deleted, guaranteeing that historical campaigns remain reproducible and unaltered.
-    </p>
-  </div>
-
-  <div id="version-alert" class="alert" style="display: none; margin-bottom: 1.5rem;"></div>
-
-  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
-    <!-- Version History List -->
+  <div class="page-header">
     <div>
-      <h2 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 1rem;">Version History</h2>
+      <div style="display: flex; align-items: center; gap: var(--space-3);">
+        <h1 class="page-header-title">{{ template.name }}</h1>
+        <span class="sidebar-badge">{{ template.versions|length }} Versions Published</span>
+      </div>
+      {% if template.description %}
+        <p class="page-header-subtitle">{{ template.description }}</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Immutable Versioning Callout -->
+  <div class="incident-banner warning">
+    <span class="incident-banner-icon">🔒</span>
+    <div class="incident-banner-content">
+      <div class="incident-banner-title">Immutable Versioning Guarantee</div>
+      <div class="incident-banner-desc">
+        Template versions are write-once and append-only. Existing versions cannot be modified or deleted, guaranteeing that historical campaigns remain reproducible and unaltered.
+      </div>
+    </div>
+  </div>
+
+  <div id="version-alert" class="alert"></div>
+
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-5);">
+    <!-- Version History Stack -->
+    <div>
+      <div style="font-size: 14px; font-weight: 600; color: var(--ids-text-primary); margin-bottom: var(--space-3);">
+        Version History
+      </div>
+
       {% if template.versions %}
-        <div style="display: flex; flex-direction: column; gap: 1rem;">
+        <div style="display: flex; flex-direction: column; gap: var(--space-4);">
           {% for v in template.versions|reverse %}
-          <div class="card" style="border: 1px solid var(--border);">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-              <span style="font-weight: 700; font-size: 1rem; color: var(--accent);">Version {{ v.version_number }}</span>
-              <span style="font-size: 0.8rem; color: var(--text-secondary);">
+          <div class="card">
+            <div class="card-header">
+              <span style="font-weight: 700; font-size: 14px; color: var(--ids-primary);">Version {{ v.version_number }}</span>
+              <span style="font-size: 11px; color: var(--ids-text-muted);">
                 {{ v.created_at.strftime('%Y-%m-%d %H:%M') }} {% if v.created_by %}by {{ v.created_by }}{% endif %}
               </span>
             </div>
-            <div style="background-color: var(--bg-main); padding: 0.75rem; border-radius: var(--radius); font-family: monospace; font-size: 0.85rem; white-space: pre-wrap; line-height: 1.5; border: 1px solid rgba(255,255,255,0.05);">{{ v.body }}</div>
+            <div style="background-color: var(--ids-canvas); padding: var(--space-3); border-radius: var(--radius-sm); font-family: var(--font-mono); font-size: 12px; white-space: pre-wrap; line-height: 1.5; border: 1px solid var(--ids-border);">{{ v.body }}</div>
           </div>
           {% endfor %}
         </div>
       {% endif %}
     </div>
 
-    <!-- Create New Version Box -->
+    <!-- Append New Version & WhatsApp Preview -->
     <div>
-      <div class="card" style="position: sticky; top: 1.5rem;">
-        <h2 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 0.5rem;">Append New Version</h2>
-        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">
-          Creating a new version leaves all prior versions intact. Campaigns referencing older versions will remain unaffected.
-        </p>
+      <div class="card" style="position: sticky; top: 76px;">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Append New Version</div>
+            <div class="card-subtitle">Publishes next sequential version leaving prior versions intact</div>
+          </div>
+        </div>
 
         <form id="new-version-form">
           <div class="form-group">
-            <label for="new-version-body">New Version Content *</label>
-            <textarea id="new-version-body" class="form-input" rows="7" required placeholder="Type new template content here..."></textarea>
+            <label for="new-version-body">New Version Message Copy *</label>
+            <textarea id="new-version-body" class="form-input" rows="6" required placeholder="Type new template content here..."></textarea>
           </div>
 
-          <div style="margin-bottom: 1rem;">
-            <button type="button" onclick="previewNewVersion()" class="btn btn-secondary btn-sm" style="width: auto;">Preview Rendering</button>
-          </div>
+          <div style="margin-bottom: var(--space-4);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <span style="font-size: 11px; color: var(--ids-text-muted);">Supported: <code>{{ '{{name}}' }}</code>, <code>{{ '{{company}}' }}</code>, <code>{{ '{{city}}' }}</code>, <code>{{ '{{campaign}}' }}</code></span>
+              <button type="button" onclick="previewNewVersion()" class="btn btn-secondary btn-sm">Preview</button>
+            </div>
 
-          <div id="new-version-preview" style="display: none; background-color: var(--bg-main); padding: 0.75rem; border-radius: var(--radius); font-family: monospace; font-size: 0.85rem; white-space: pre-wrap; margin-bottom: 1rem; border: 1px dashed var(--border);"></div>
+            <!-- WhatsApp Preview Box -->
+            <div class="whatsapp-preview-card">
+              <div class="whatsapp-bubble-outgoing">
+                <div id="new-version-preview" style="white-space: pre-wrap;">Type message body and click "Preview" to verify rendering.</div>
+                <div class="whatsapp-bubble-meta">
+                  <span>10:42 AM</span>
+                  <span class="whatsapp-neutral-check">✓ SENT</span>
+                </div>
+              </div>
+              <div class="whatsapp-preview-disclaimer">
+                Visual message preview only — not a delivery or read receipt. System confirms send operations via SEND_CONFIRMED criteria only.
+              </div>
+            </div>
+          </div>
 
           <button type="submit" id="btn-save-version" class="btn btn-primary" style="width: 100%;">
             Publish New Version
@@ -86,29 +117,26 @@
 async function previewNewVersion() {
   const body = document.getElementById('new-version-body').value.trim();
   const previewDiv = document.getElementById('new-version-preview');
-  if (!body) return;
+  if (!body) {
+    previewDiv.textContent = 'Please enter version content above.';
+    return;
+  }
 
   try {
-    const res = await fetch('/api/v1/templates/preview', {
+    const res = await apiFetch('/api/v1/templates/preview', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRF-Token': getCsrfToken(),
-      },
-      body: JSON.stringify({ body: body })
+      body: { body: body }
     });
     const result = await res.json();
-    previewDiv.style.display = 'block';
     if (res.ok && result.success) {
-      previewDiv.style.color = 'var(--text-primary)';
+      previewDiv.style.color = '#E9EDEF';
       previewDiv.textContent = result.data.rendered_text;
     } else {
-      previewDiv.style.color = 'var(--accent-red)';
+      previewDiv.style.color = '#FCA5A5';
       previewDiv.textContent = 'Error: ' + (result.error?.message || result.detail || 'Invalid variables.');
     }
   } catch (err) {
-    previewDiv.style.display = 'block';
-    previewDiv.style.color = 'var(--accent-red)';
+    previewDiv.style.color = '#FCA5A5';
     previewDiv.textContent = 'Preview failed.';
   }
 }
@@ -120,31 +148,29 @@ document.getElementById('new-version-form').addEventListener('submit', async fun
   alertBox.style.display = 'none';
 
   const body = document.getElementById('new-version-body').value.trim();
+
   btn.disabled = true;
   btn.textContent = 'Publishing...';
 
   try {
-    const res = await fetch('/api/v1/templates/{{ template.id }}/versions', {
+    const res = await apiFetch('/api/v1/templates/{{ template.id }}/versions', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRF-Token': getCsrfToken(),
-      },
-      body: JSON.stringify({ body: body })
+      body: { body: body }
     });
     const result = await res.json();
+
     if (res.ok && result.success) {
       window.location.reload();
     } else {
       alertBox.className = 'alert alert-danger';
-      alertBox.textContent = result.error?.message || result.detail || 'Failed to publish new version.';
+      alertBox.textContent = result.error?.message || result.detail || 'Failed to append version.';
       alertBox.style.display = 'block';
       btn.disabled = false;
       btn.textContent = 'Publish New Version';
     }
   } catch (err) {
     alertBox.className = 'alert alert-danger';
-    alertBox.textContent = 'Network or server error.';
+    alertBox.textContent = 'Network or server error appending version.';
     alertBox.style.display = 'block';
     btn.disabled = false;
     btn.textContent = 'Publish New Version';

@@ -2,268 +2,226 @@
 
 {% block title %}Queue & Message Operations &bull; Integra Outreach Control Center{% endblock %}
 
+{% block breadcrumbs %}
+<span class="topbar-breadcrumb-item">Outreach</span>
+<span class="topbar-breadcrumb-sep">/</span>
+<span class="topbar-breadcrumb-item active">Queue & Message Operations</span>
+{% endblock %}
+
 {% block content %}
-<div class="container" style="padding-top: 1.5rem; padding-bottom: 2.5rem;">
+<div style="padding-bottom: 2rem;">
 
-  <!-- Nav Tabs -->
-  <nav class="nav-tabs">
-    <a href="/dashboard" class="nav-link">Dashboard</a>
-    <a href="/campaigns" class="nav-link">Campaigns</a>
-    <a href="/queue" class="nav-link active">Queue</a>
-    <a href="/contacts" class="nav-link">Contacts</a>
-    <a href="/templates" class="nav-link">Templates</a>
-    <span class="nav-link disabled">Analytics <span class="nav-badge-soon">Coming Soon</span></span>
-    <span class="nav-link disabled">WhatsApp <span class="nav-badge-soon">Coming Soon</span></span>
-    <span class="nav-link disabled">Settings <span class="nav-badge-soon">Coming Soon</span></span>
-  </nav>
-
-  <!-- Emergency Stop Warning Banner -->
+  <!-- Incident Banner: Emergency Stop -->
   {% if stats.emergency_stop_active %}
-  <div style="background-color: rgba(239, 68, 68, 0.15); border: 1px solid var(--danger); border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 1rem;">
-    <span style="font-size: 1.5rem;">🛑</span>
-    <div>
-      <h3 style="color: var(--danger); font-size: 1rem; font-weight: 700; margin: 0;">EMERGENCY STOP ACTIVE</h3>
-      <p style="color: var(--text-secondary); font-size: 0.85rem; margin: 0.25rem 0 0 0;">
+  <div class="incident-banner danger">
+    <span class="incident-banner-icon">🛑</span>
+    <div class="incident-banner-content">
+      <div class="incident-banner-title">EMERGENCY STOP ACTIVE — DISPATCH BLOCKED</div>
+      <div class="incident-banner-desc">
         All new queue dispatch claims are blocked. In-flight dispatches conclude safely.
-      </p>
+      </div>
     </div>
   </div>
   {% endif %}
 
-  <!-- Circuit Breaker Warning Banner -->
+  <!-- Incident Banner: Circuit Breaker -->
   {% if stats.circuit_breaker_open %}
-  <div style="background-color: rgba(245, 158, 11, 0.15); border: 1px solid var(--warning); border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 1rem;">
-    <span style="font-size: 1.5rem;">⚠️</span>
-    <div>
-      <h3 style="color: var(--warning); font-size: 1rem; font-weight: 700; margin: 0;">CIRCUIT BREAKER OPEN</h3>
-      <p style="color: var(--text-secondary); font-size: 0.85rem; margin: 0.25rem 0 0 0;">
-        Consecutive error thresholds reached on one or more campaigns. Affected campaigns are paused.
-      </p>
+  <div class="incident-banner warning">
+    <span class="incident-banner-icon">⚠️</span>
+    <div class="incident-banner-content">
+      <div class="incident-banner-title">CIRCUIT BREAKER OPEN</div>
+      <div class="incident-banner-desc">
+        Consecutive error threshold reached on one or more campaigns. Affected campaigns are paused.
+      </div>
     </div>
   </div>
   {% endif %}
 
-  <!-- Header -->
-  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+  <!-- Page Header -->
+  <div class="page-header">
     <div>
-      <h1 style="font-size: 1.85rem; font-weight: 800;">Queue & Message Operations</h1>
-      <p style="color: var(--text-secondary); font-size: 0.9rem;">
-        Persistent message queue inspection, lease health, and operational controls
-      </p>
+      <h1 class="page-header-title">Queue &amp; Message Operations</h1>
+      <p class="page-header-subtitle">Persistent message queue backlog, worker lease health, and operational triage</p>
     </div>
-    <div style="display: flex; gap: 0.75rem;">
-      <button onclick="openReconcileModal()" class="btn btn-secondary" style="width: auto;">
-        🔄 Reconcile Stale Leases
+    <div class="page-header-actions">
+      <button onclick="openReconcileModal()" class="btn btn-secondary">
+        <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2" style="margin-right: 4px;">
+          <polyline points="23 4 23 10 17 10"></polyline>
+          <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+        </svg>
+        Reconcile Stale Leases
       </button>
     </div>
   </div>
 
-  <!-- Operational Summary KPI Cards -->
-  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
-    <div class="card" style="padding: 1rem;">
-      <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600;">Queue Depth</div>
-      <div style="font-size: 1.6rem; font-weight: 700; margin-top: 0.25rem; color: var(--text);">{{ stats.queued }}</div>
-      <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">Total staged: {{ stats.total }}</div>
+  <!-- Operational Summary KPI Row -->
+  <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--space-4); margin-bottom: var(--space-6);">
+    <div class="kpi-card">
+      <div class="kpi-label">Queue Depth</div>
+      <div class="kpi-value">{{ stats.queued }}</div>
+      <div class="kpi-subtext">Total staged: {{ stats.total }}</div>
     </div>
 
-    <div class="card" style="padding: 1rem;">
-      <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600;">Processing Leases</div>
-      <div style="font-size: 1.6rem; font-weight: 700; margin-top: 0.25rem; color: #60a5fa;">{{ stats.processing }}</div>
-      <div style="font-size: 0.75rem; color: {% if stats.stale_leases > 0 %}var(--warning){% else %}var(--text-secondary){% endif %}; margin-top: 0.25rem;">
+    <div class="kpi-card">
+      <div class="kpi-label">Active Leases</div>
+      <div class="kpi-value" style="color: var(--ids-primary);">{{ stats.processing }}</div>
+      <div class="kpi-subtext" style="color: {% if stats.stale_leases > 0 %}var(--ids-warning){% else %}var(--ids-text-muted){% endif %};">
         Stale leases: {{ stats.stale_leases }}
       </div>
     </div>
 
-    <div class="card" style="padding: 1rem;">
-      <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600;">Retry Pending</div>
-      <div style="font-size: 1.6rem; font-weight: 700; margin-top: 0.25rem; color: #a78bfa;">{{ stats.retry_pending }}</div>
-      <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">Exponential backoff active</div>
+    <div class="kpi-card">
+      <div class="kpi-label">Retry Pending</div>
+      <div class="kpi-value" style="color: #C084FC;">{{ stats.retry_pending }}</div>
+      <div class="kpi-subtext">Exponential backoff active</div>
     </div>
 
-    <div class="card" style="padding: 1rem; {% if stats.unknown_outcome > 0 %}border-color: var(--warning); background-color: rgba(245, 158, 11, 0.05);{% endif %}">
-      <div style="font-size: 0.75rem; color: var(--warning); text-transform: uppercase; font-weight: 700;">
-        ⚠️ Unknown Outcome
+    <div class="kpi-card" style="{% if stats.unknown_outcome > 0 %}border-color: var(--ids-warning); background-color: rgba(245, 158, 11, 0.06);{% endif %}">
+      <div class="kpi-label" style="color: {% if stats.unknown_outcome > 0 %}var(--ids-warning){% else %}var(--ids-text-muted){% endif %};">
+        ⚠️ UNKNOWN OUTCOME
       </div>
-      <div style="font-size: 1.6rem; font-weight: 700; margin-top: 0.25rem; color: var(--warning);">
-        {{ stats.unknown_outcome }}
-      </div>
-      <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
-        Manual review required
-      </div>
+      <div class="kpi-value" style="color: var(--ids-warning);">{{ stats.unknown_outcome }}</div>
+      <div class="kpi-subtext">Manual review required</div>
     </div>
 
-    <div class="card" style="padding: 1rem;">
-      <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600;">Failed (Permanent)</div>
-      <div style="font-size: 1.6rem; font-weight: 700; margin-top: 0.25rem; color: var(--danger);">{{ stats.failed }}</div>
-      <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">Exhausted or invalid</div>
-    </div>
-
-    <div class="card" style="padding: 1rem;">
-      <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600;">Confirmed Send Rate</div>
-      <div style="font-size: 1.6rem; font-weight: 700; margin-top: 0.25rem; color: var(--success);">{{ stats.confirmed_send_rate }}%</div>
-      <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">SEND_CONFIRMED / Terminal</div>
+    <div class="kpi-card">
+      <div class="kpi-label">Failed (Permanent)</div>
+      <div class="kpi-value" style="color: var(--ids-danger);">{{ stats.failed }}</div>
+      <div class="kpi-subtext">Exhausted or invalid</div>
     </div>
   </div>
 
-  <!-- Search & Filter Bar -->
-  <form method="GET" action="/queue" class="card" style="padding: 1rem; margin-bottom: 1.5rem; display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end;">
-    <div style="min-width: 180px; flex: 1;">
-      <label style="font-size: 0.8rem; color: var(--text-secondary); display: block; margin-bottom: 0.25rem;">Campaign</label>
-      <select name="campaign_id" class="form-input" style="width: 100%;">
+  <!-- Filter Toolbar -->
+  <form method="GET" action="/queue" class="filter-toolbar">
+    <div class="filter-item" style="min-width: 180px;">
+      <select name="campaign_id" class="form-input">
         <option value="">All Campaigns</option>
         {% for c in campaigns %}
-        <option value="{{ c.id }}" {% if selected_campaign == c.id %}selected{% endif %}>{{ c.name }}</option>
+          <option value="{{ c.id }}" {% if selected_campaign == c.id %}selected{% endif %}>{{ c.name }}</option>
         {% endfor %}
       </select>
     </div>
 
-    <div style="min-width: 170px;">
-      <label style="font-size: 0.8rem; color: var(--text-secondary); display: block; margin-bottom: 0.25rem;">Status</label>
-      <select name="status" class="form-input" style="width: 100%;">
+    <div class="filter-item" style="max-width: 180px;">
+      <select name="status" class="form-input">
         <option value="">All Statuses</option>
         <option value="PENDING" {% if selected_status == 'PENDING' %}selected{% endif %}>PENDING</option>
         <option value="QUEUED" {% if selected_status == 'QUEUED' %}selected{% endif %}>QUEUED</option>
         <option value="PROCESSING" {% if selected_status == 'PROCESSING' %}selected{% endif %}>PROCESSING</option>
-        <option value="SENT" {% if selected_status == 'SENT' %}selected{% endif %}>SENT</option>
         <option value="RETRY_PENDING" {% if selected_status == 'RETRY_PENDING' %}selected{% endif %}>RETRY_PENDING</option>
+        <option value="SENT" {% if selected_status == 'SENT' %}selected{% endif %}>SENT</option>
         <option value="FAILED" {% if selected_status == 'FAILED' %}selected{% endif %}>FAILED</option>
-        <option value="UNKNOWN_OUTCOME" {% if selected_status == 'UNKNOWN_OUTCOME' %}selected{% endif %}>⚠️ UNKNOWN_OUTCOME</option>
         <option value="CANCELLED" {% if selected_status == 'CANCELLED' %}selected{% endif %}>CANCELLED</option>
         <option value="SKIPPED" {% if selected_status == 'SKIPPED' %}selected{% endif %}>SKIPPED</option>
+        <option value="UNKNOWN_OUTCOME" {% if selected_status == 'UNKNOWN_OUTCOME' %}selected{% endif %}>UNKNOWN_OUTCOME</option>
       </select>
     </div>
 
-    <div style="min-width: 180px; flex: 1;">
-      <label style="font-size: 0.8rem; color: var(--text-secondary); display: block; margin-bottom: 0.25rem;">Search Contact</label>
-      <input type="text" name="contact_query" value="{{ contact_query }}" placeholder="Filter by name or phone..." class="form-input" style="width: 100%;">
+    <div class="filter-item" style="min-width: 200px;">
+      <input type="text" name="contact_query" value="{{ contact_query }}" placeholder="Filter by contact name or phone..." class="form-input">
     </div>
 
-    <div style="min-width: 150px;">
-      <label style="font-size: 0.8rem; color: var(--text-secondary); display: block; margin-bottom: 0.25rem;">Retry Status</label>
-      <select name="retry_filter" class="form-input" style="width: 100%;">
-        <option value="">All</option>
-        <option value="HAS_RETRY" {% if selected_retry == 'HAS_RETRY' %}selected{% endif %}>Has Retried</option>
-        <option value="NO_RETRY" {% if selected_retry == 'NO_RETRY' %}selected{% endif %}>No Retries</option>
+    <div class="filter-item" style="max-width: 160px;">
+      <select name="retry_filter" class="form-input">
+        <option value="">All Retries</option>
+        <option value="HAS_RETRY" {% if selected_retry == 'HAS_RETRY' %}selected{% endif %}>Has Retries (&gt;0)</option>
+        <option value="NO_RETRY" {% if selected_retry == 'NO_RETRY' %}selected{% endif %}>No Retries (0)</option>
         <option value="RETRY_PENDING" {% if selected_retry == 'RETRY_PENDING' %}selected{% endif %}>Retry Pending</option>
       </select>
     </div>
 
-    <div>
-      <button type="submit" class="btn btn-secondary" style="width: auto;">Filter</button>
-      <a href="/queue" class="btn btn-secondary" style="width: auto; text-decoration: none;">Reset</a>
+    <div style="display: flex; gap: var(--space-2);">
+      <button type="submit" class="btn btn-secondary btn-sm">Filter</button>
+      <a href="/queue" class="btn btn-outline btn-sm">Reset</a>
     </div>
   </form>
 
-  <!-- Messages Table -->
-  <div class="card" style="padding: 0; overflow: hidden; margin-bottom: 1.5rem;">
-    <div style="overflow-x: auto;">
-      <table class="table" style="width: 100%; border-collapse: collapse; text-align: left;">
-        <thead>
-          <tr style="background-color: rgba(255, 255, 255, 0.03); border-bottom: 1px solid var(--border);">
-            <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">ID</th>
-            <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">Campaign</th>
-            <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">Contact</th>
-            <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">Status</th>
-            <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">Attempts</th>
-            <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">Retry Info</th>
-            <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">Outcome / Error</th>
-            <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">Queued At</th>
-            <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; text-align: right;">Action</th>
+  <!-- Queue High-Density Data Table -->
+  <div class="table-scroll-container">
+    <table class="table table-sticky-first">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Campaign</th>
+          <th>Contact</th>
+          <th>Phone (E.164)</th>
+          <th>Status</th>
+          <th>Retries</th>
+          <th>Next Retry</th>
+          <th>Queued</th>
+          <th style="text-align: right;">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if queue_data.items %}
+          {% for m in queue_data.items %}
+          <tr>
+            <td class="table-cell-mono table-cell-muted">#{{ m.id }}</td>
+            <td>
+              <a href="/campaigns/{{ m.campaign_id }}" style="color: var(--ids-text-primary); font-weight: 500;">
+                {{ m.campaign_name or m.campaign_id }}
+              </a>
+            </td>
+            <td style="font-weight: 600;">{{ m.contact_name or '—' }}</td>
+            <td class="table-cell-mono">{{ m.contact_phone or '—' }}</td>
+            <td>
+              {% if m.is_unknown_outcome %}
+                <span class="status-pill status-unknown">⚠️ UNKNOWN_OUTCOME</span>
+              {% elif m.status == 'SENT' %}
+                <span class="status-pill status-sent">SENT (CONFIRMED)</span>
+              {% elif m.status == 'PROCESSING' %}
+                <span class="status-pill status-processing">PROCESSING</span>
+              {% elif m.status == 'QUEUED' %}
+                <span class="status-pill status-queued">QUEUED</span>
+              {% elif m.status == 'PENDING' %}
+                <span class="status-pill status-pending">PENDING</span>
+              {% elif m.status == 'RETRY_PENDING' %}
+                <span class="status-pill status-retry">RETRY_PENDING</span>
+              {% elif m.status == 'FAILED' %}
+                <span class="status-pill status-unhealthy">FAILED</span>
+              {% elif m.status == 'CANCELLED' %}
+                <span class="status-pill status-draft">CANCELLED</span>
+              {% elif m.status == 'SKIPPED' %}
+                <span class="status-pill status-skipped">SKIPPED</span>
+              {% else %}
+                <span class="status-pill status-draft">{{ m.status }}</span>
+              {% endif %}
+            </td>
+            <td class="table-cell-mono">{{ m.retry_count }} / {{ m.max_retries }}</td>
+            <td class="table-cell-muted" style="font-size: 11px;">
+              {% if m.next_retry_at %}{{ m.next_retry_at.strftime('%H:%M:%S') }}{% else %}—{% endif %}
+            </td>
+            <td class="table-cell-muted" style="font-size: 12px;">{{ m.queued_at.strftime('%Y-%m-%d %H:%M') }}</td>
+            <td class="table-cell-right">
+              <a href="/queue/{{ m.id }}" class="btn btn-secondary btn-sm">Inspect &rarr;</a>
+            </td>
           </tr>
-        </thead>
-        <tbody>
-          {% if queue_data.items %}
-            {% for msg in queue_data.items %}
-            <tr style="border-bottom: 1px solid var(--border); {% if msg.is_unknown_outcome %}background-color: rgba(245, 158, 11, 0.04);{% endif %}">
-              <td style="padding: 0.85rem 1rem; font-weight: 600; font-family: monospace;">
-                <a href="/queue/{{ msg.id }}" style="color: var(--primary); text-decoration: none;">#{{ msg.id }}</a>
-              </td>
-              <td style="padding: 0.85rem 1rem; font-size: 0.9rem;">
-                {{ msg.campaign_name or msg.campaign_id }}
-              </td>
-              <td style="padding: 0.85rem 1rem; font-size: 0.9rem;">
-                {% if msg.contact_name %}<div>{{ msg.contact_name }}</div>{% endif %}
-                <span style="font-family: monospace; font-size: 0.8rem; color: var(--text-secondary);">{{ msg.contact_phone or '—' }}</span>
-              </td>
-              <td style="padding: 0.85rem 1rem;">
-                {% if msg.is_unknown_outcome %}
-                  <span class="status-pill" style="background-color: rgba(245, 158, 11, 0.2); color: var(--warning); border: 1px solid var(--warning); font-weight: 700;">
-                    ⚠️ UNKNOWN OUTCOME
-                  </span>
-                {% elif msg.status == 'SENT' %}
-                  <span class="status-pill status-active">SENT</span>
-                {% elif msg.status == 'PROCESSING' %}
-                  <span class="status-pill" style="background-color: rgba(59, 130, 246, 0.2); color: #60a5fa;">PROCESSING</span>
-                {% elif msg.status == 'QUEUED' %}
-                  <span class="status-pill" style="background-color: rgba(147, 197, 253, 0.15); color: #93c5fd;">QUEUED</span>
-                {% elif msg.status == 'RETRY_PENDING' %}
-                  <span class="status-pill" style="background-color: rgba(167, 139, 250, 0.2); color: #a78bfa;">RETRY_PENDING</span>
-                {% elif msg.status == 'FAILED' %}
-                  <span class="status-pill status-stopped">FAILED</span>
-                {% elif msg.status == 'CANCELLED' %}
-                  <span class="status-pill" style="background-color: rgba(107, 114, 128, 0.2); color: #9ca3af;">CANCELLED</span>
-                {% elif msg.status == 'SKIPPED' %}
-                  <span class="status-pill" style="background-color: rgba(107, 114, 128, 0.2); color: #9ca3af;">SKIPPED</span>
-                {% else %}
-                  <span class="status-pill status-draft">{{ msg.status }}</span>
-                {% endif %}
-              </td>
-              <td style="padding: 0.85rem 1rem; font-size: 0.85rem; font-family: monospace;">
-                {{ msg.attempt_count }} / {{ msg.max_attempts }}
-              </td>
-              <td style="padding: 0.85rem 1rem; font-size: 0.85rem;">
-                {% if msg.status == 'RETRY_PENDING' and msg.next_retry_at %}
-                  <span style="color: #a78bfa;">Next: {{ msg.next_retry_at.strftime('%H:%M:%S') }}</span>
-                {% elif msg.retry_count > 0 %}
-                  <span style="color: var(--text-secondary);">Retries: {{ msg.retry_count }}</span>
-                {% else %}
-                  <span style="color: var(--text-secondary);">—</span>
-                {% endif %}
-              </td>
-              <td style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                {% if msg.error_type %}
-                  <span style="color: {% if msg.is_unknown_outcome %}var(--warning){% else %}var(--danger){% endif %}; font-weight: 600;">[{{ msg.error_type }}]</span>
-                {% endif %}
-                {{ msg.last_error or '—' }}
-              </td>
-              <td style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); white-space: nowrap;">
-                {{ msg.queued_at.strftime('%Y-%m-%d %H:%M') if msg.queued_at else '—' }}
-              </td>
-              <td style="padding: 0.85rem 1rem; text-align: right; white-space: nowrap;">
-                <a href="/queue/{{ msg.id }}" class="btn btn-secondary btn-sm" style="padding: 0.35rem 0.65rem;">
-                  Inspect
-                </a>
-              </td>
-            </tr>
-            {% endfor %}
-          {% else %}
-            <tr>
-              <td colspan="9" style="padding: 2.5rem; text-align: center; color: var(--text-secondary);">
-                No queue messages match the selected filters.
-              </td>
-            </tr>
-          {% endif %}
-        </tbody>
-      </table>
-    </div>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="9">
+              <div class="empty-state">
+                <div class="empty-state-icon">📋</div>
+                <div class="empty-state-title">No messages in queue matching filters</div>
+                <div class="empty-state-desc">All messages are processed or no campaigns are currently staging dispatches.</div>
+              </div>
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
   </div>
 
-  <!-- Pagination Controls -->
+  <!-- Pagination -->
   {% if queue_data.total_pages > 1 %}
-  <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem;">
-    <div style="font-size: 0.85rem; color: var(--text-secondary);">
-      Showing page {{ queue_data.page }} of {{ queue_data.total_pages }} ({{ queue_data.total }} total items)
-    </div>
-    <div style="display: flex; gap: 0.5rem;">
-      {% if queue_data.page > 1 %}
-      <a href="/queue?page={{ queue_data.page - 1 }}&campaign_id={{ selected_campaign or '' }}&status={{ selected_status or '' }}&contact_query={{ contact_query or '' }}&retry_filter={{ selected_retry or '' }}" class="btn btn-secondary btn-sm">
-        &larr; Previous
-      </a>
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-top: var(--space-4); font-size: 12px; color: var(--ids-text-secondary);">
+    <div>Showing page {{ queue_data.page }} of {{ queue_data.total_pages }} ({{ queue_data.total }} total items)</div>
+    <div style="display: flex; gap: var(--space-2);">
+      {% if queue_data.has_prev %}
+        <a href="?page={{ queue_data.page - 1 }}&campaign_id={{ selected_campaign or '' }}&status={{ selected_status or '' }}&contact_query={{ contact_query or '' }}&retry_filter={{ selected_retry or '' }}" class="btn btn-secondary btn-sm">&larr; Previous</a>
       {% endif %}
-      {% if queue_data.page < queue_data.total_pages %}
-      <a href="/queue?page={{ queue_data.page + 1 }}&campaign_id={{ selected_campaign or '' }}&status={{ selected_status or '' }}&contact_query={{ contact_query or '' }}&retry_filter={{ selected_retry or '' }}" class="btn btn-secondary btn-sm">
-        Next &rarr;
-      </a>
+      {% if queue_data.has_next %}
+        <a href="?page={{ queue_data.page + 1 }}&campaign_id={{ selected_campaign or '' }}&status={{ selected_status or '' }}&contact_query={{ contact_query or '' }}&retry_filter={{ selected_retry or '' }}" class="btn btn-secondary btn-sm">Next &rarr;</a>
       {% endif %}
     </div>
   </div>
@@ -271,49 +229,49 @@
 
 </div>
 
-<!-- Reconcile Confirmation Modal -->
-<div id="reconcileModal" class="modal-backdrop" style="display: none;">
-  <div class="modal card" style="max-width: 480px; width: 90%; margin: 10% auto;">
-    <h3 style="margin-top: 0; font-size: 1.25rem;">Reconcile Stale Worker Leases</h3>
-    <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.5;">
-      This operation scans the persistent queue for messages stuck in <code>PROCESSING</code> whose worker lease has expired (>120 seconds).
-      It recovers them back to <code>RETRY_PENDING</code> (or <code>FAILED</code> if maximum attempts were reached).
-    </p>
-    <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem;">
-      <button onclick="closeReconcileModal()" class="btn btn-secondary" style="width: auto;">Cancel</button>
-      <button id="reconcileConfirmBtn" onclick="executeReconcile()" class="btn btn-primary" style="width: auto;">Run Reconciliation</button>
+<!-- MODAL: RECONCILE STALE LEASES -->
+<div id="modal-reconcile" class="modal-backdrop">
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <h3 class="modal-title">Reconcile Stale Worker Leases</h3>
+      <button onclick="closeModal('modal-reconcile')" class="modal-close-btn">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="color: var(--ids-text-secondary); font-size: 13px; margin-bottom: var(--space-4);">
+        Recovers messages stuck in PROCESSING state with expired worker leases (&gt;120 seconds). Resets eligible messages back to QUEUED or RETRY_PENDING according to backoff rules.
+      </p>
+      <div id="reconcile-error" class="alert alert-error"></div>
+    </div>
+    <div class="modal-footer">
+      <button onclick="closeModal('modal-reconcile')" class="btn btn-secondary">Cancel</button>
+      <button onclick="confirmReconcile()" class="btn btn-primary">Reconcile Leases</button>
     </div>
   </div>
 </div>
 
 <script>
 function openReconcileModal() {
-  document.getElementById('reconcileModal').style.display = 'block';
+  openModal('modal-reconcile');
 }
 
-function closeReconcileModal() {
-  document.getElementById('reconcileModal').style.display = 'none';
-}
+async function confirmReconcile() {
+  const errBox = document.getElementById('reconcile-error');
+  errBox.style.display = 'none';
 
-async function executeReconcile() {
-  const btn = document.getElementById('reconcileConfirmBtn');
-  btn.disabled = true;
-  btn.textContent = 'Reconciling...';
   try {
-    const resp = await apiFetch('/api/v1/queue/reconcile', { method: 'POST' });
-    const res = await resp.json();
-    if (res && res.success) {
-      alert(`Reconciliation complete.\nRecovered leases: ${res.data.recovered_leases}\nPending unknown outcomes: ${res.data.pending_unknown_outcomes}`);
+    const res = await apiFetch('/api/v1/queue/reconcile', {
+      method: 'POST'
+    });
+    const result = await res.json();
+    if (res.ok && result.success) {
       window.location.reload();
     } else {
-      alert(`Error reconciling: ${res.error ? res.error.message : 'Unknown error'}`);
+      errBox.textContent = result.error?.message || result.detail || 'Reconciliation failed.';
+      errBox.style.display = 'block';
     }
   } catch (err) {
-    alert(`Request failed: ${err.message}`);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Run Reconciliation';
-    closeReconcileModal();
+    errBox.textContent = `Error: ${err.message}`;
+    errBox.style.display = 'block';
   }
 }
 </script>

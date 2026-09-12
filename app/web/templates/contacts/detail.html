@@ -2,66 +2,75 @@
 
 {% block title %}{{ contact.name }} &bull; Integra Outreach Control Center{% endblock %}
 
-{% block content %}
-<div class="container" style="padding-top: 1.5rem; padding-bottom: 2.5rem; max-width: 800px;">
+{% block breadcrumbs %}
+<span class="topbar-breadcrumb-item">Outreach</span>
+<span class="topbar-breadcrumb-sep">/</span>
+<a href="/contacts" class="topbar-breadcrumb-item">Contacts</a>
+<span class="topbar-breadcrumb-sep">/</span>
+<span class="topbar-breadcrumb-item active">{{ contact.name }}</span>
+{% endblock %}
 
-  <!-- Breadcrumb -->
-  <div style="margin-bottom: 1rem;">
-    <a href="/contacts" style="color: var(--text-secondary); text-decoration: none; font-size: 0.9rem;">&larr; Back to Contacts</a>
+{% block content %}
+<div style="max-width: 900px; margin: 0 auto; padding-bottom: 2rem;">
+
+  <div style="margin-bottom: var(--space-4);">
+    <a href="/contacts" class="btn btn-outline btn-sm">&larr; Back to Contacts</a>
   </div>
 
-  <!-- Header -->
-  <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+  <div class="page-header">
     <div>
-      <div style="display: flex; align-items: center; gap: 0.75rem;">
-        <h1 style="font-size: 1.85rem; font-weight: 800;">{{ contact.name }}</h1>
+      <div style="display: flex; align-items: center; gap: var(--space-3);">
+        <h1 class="page-header-title">{{ contact.name }}</h1>
         <span class="status-pill status-{{ contact.consent_status }}">{{ contact.consent_status }}</span>
         <span class="status-pill status-{{ contact.contact_status }}">{{ contact.contact_status }}</span>
       </div>
-      <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.25rem;">
-        Contact ID: #{{ contact.id }} &bull; E.164: <span style="font-family: monospace;">{{ contact.phone_e164 }}</span>
+      <p class="page-header-subtitle">
+        Contact ID: #{{ contact.id }} &bull; E.164: <span class="table-cell-mono">{{ contact.phone_e164 }}</span>
       </p>
     </div>
   </div>
 
-  <div id="contact-alert" class="alert" style="display: none; margin-bottom: 1.5rem;"></div>
+  <div id="contact-alert" class="alert"></div>
 
-  <!-- Info Grid -->
-  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-5);">
     <!-- Profile Card -->
     <div class="card">
-      <h2 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 0.75rem;">Contact Overview</h2>
-      <ul style="list-style: none; padding: 0; font-size: 0.9rem;">
-        <li style="display: flex; justify-content: space-between; padding: 0.4rem 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
-          <span style="color: var(--text-secondary);">Phone (E.164):</span>
-          <strong style="font-family: monospace;">{{ contact.phone_e164 }}</strong>
-        </li>
-        <li style="display: flex; justify-content: space-between; padding: 0.4rem 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
-          <span style="color: var(--text-secondary);">Country Code:</span>
+      <div class="card-header">
+        <div class="card-title">Contact Overview</div>
+      </div>
+      <div style="font-size: 13px;">
+        <div class="subsystem-row">
+          <span style="color: var(--ids-text-secondary);">Phone (E.164):</span>
+          <strong class="table-cell-mono">{{ contact.phone_e164 }}</strong>
+        </div>
+        <div class="subsystem-row">
+          <span style="color: var(--ids-text-secondary);">Country Code:</span>
           <strong>{{ contact.country_code }}</strong>
-        </li>
-        <li style="display: flex; justify-content: space-between; padding: 0.4rem 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
-          <span style="color: var(--text-secondary);">Company:</span>
+        </div>
+        <div class="subsystem-row">
+          <span style="color: var(--ids-text-secondary);">Company:</span>
           <strong>{{ contact.company or '—' }}</strong>
-        </li>
-        <li style="display: flex; justify-content: space-between; padding: 0.4rem 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
-          <span style="color: var(--text-secondary);">City:</span>
+        </div>
+        <div class="subsystem-row">
+          <span style="color: var(--ids-text-secondary);">City:</span>
           <strong>{{ contact.city or '—' }}</strong>
-        </li>
-        <li style="display: flex; justify-content: space-between; padding: 0.4rem 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
-          <span style="color: var(--text-secondary);">Messages Sent:</span>
-          <strong>{{ contact.messages_sent_count }}</strong>
-        </li>
-        <li style="display: flex; justify-content: space-between; padding: 0.4rem 0;">
-          <span style="color: var(--text-secondary);">Last Contacted:</span>
-          <strong>{{ contact.last_contacted_at.strftime('%Y-%m-%d %H:%M') if contact.last_contacted_at else 'Never' }}</strong>
-        </li>
-      </ul>
+        </div>
+        <div class="subsystem-row">
+          <span style="color: var(--ids-text-secondary);">Messages Sent:</span>
+          <strong class="table-cell-mono">{{ contact.messages_sent_count }}</strong>
+        </div>
+        <div class="subsystem-row">
+          <span style="color: var(--ids-text-secondary);">Last Contacted:</span>
+          <strong class="table-cell-muted">{{ contact.last_contacted_at.strftime('%Y-%m-%d %H:%M') if contact.last_contacted_at else 'Never' }}</strong>
+        </div>
+      </div>
     </div>
 
-    <!-- Edit Form -->
+    <!-- Edit Form Card -->
     <div class="card">
-      <h2 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 0.75rem;">Edit Contact</h2>
+      <div class="card-header">
+        <div class="card-title">Edit Contact</div>
+      </div>
       <form id="edit-contact-form">
         <div class="form-group">
           <label for="e-name">Name</label>
@@ -75,25 +84,25 @@
           <label for="e-city">City</label>
           <input type="text" id="e-city" class="form-input" value="{{ contact.city or '' }}">
         </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3);">
           <div class="form-group">
-            <label for="e-consent">Consent</label>
+            <label for="e-consent">Consent Status</label>
             <select id="e-consent" class="form-input">
-              <option value="opted_in" {% if contact.consent_status == 'opted_in' %}selected{% endif %}>Opted In</option>
-              <option value="pending" {% if contact.consent_status == 'pending' %}selected{% endif %}>Pending</option>
-              <option value="opted_out" {% if contact.consent_status == 'opted_out' %}selected{% endif %}>Opted Out</option>
+              <option value="opted_in" {% if contact.consent_status == 'opted_in' %}selected{% endif %}>opted_in</option>
+              <option value="pending" {% if contact.consent_status == 'pending' %}selected{% endif %}>pending</option>
+              <option value="opted_out" {% if contact.consent_status == 'opted_out' %}selected{% endif %}>opted_out</option>
             </select>
           </div>
           <div class="form-group">
-            <label for="e-status">Status</label>
+            <label for="e-status">Contact Status</label>
             <select id="e-status" class="form-input">
-              <option value="active" {% if contact.contact_status == 'active' %}selected{% endif %}>Active</option>
-              <option value="inactive" {% if contact.contact_status == 'inactive' %}selected{% endif %}>Inactive</option>
-              <option value="duplicate" {% if contact.contact_status == 'duplicate' %}selected{% endif %}>Duplicate</option>
+              <option value="active" {% if contact.contact_status == 'active' %}selected{% endif %}>active</option>
+              <option value="inactive" {% if contact.contact_status == 'inactive' %}selected{% endif %}>inactive</option>
+              <option value="duplicate" {% if contact.contact_status == 'duplicate' %}selected{% endif %}>duplicate</option>
             </select>
           </div>
         </div>
-        <button type="submit" id="btn-save-contact" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;">Save Changes</button>
+        <button type="submit" id="btn-save-contact" class="btn btn-primary" style="width: 100%; margin-top: var(--space-2);">Save Changes</button>
       </form>
     </div>
   </div>
@@ -111,19 +120,15 @@ document.getElementById('edit-contact-form').addEventListener('submit', async fu
   btn.textContent = 'Saving...';
 
   try {
-    const res = await fetch('/api/v1/contacts/{{ contact.id }}', {
+    const res = await apiFetch('/api/v1/contacts/{{ contact.id }}', {
       method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRF-Token': getCsrfToken(),
-      },
-      body: JSON.stringify({
+      body: {
         name: document.getElementById('e-name').value.trim() || null,
         company: document.getElementById('e-company').value.trim() || null,
         city: document.getElementById('e-city').value.trim() || null,
         consent_status: document.getElementById('e-consent').value,
         contact_status: document.getElementById('e-status').value,
-      })
+      }
     });
     const result = await res.json();
     if (res.ok && result.success) {

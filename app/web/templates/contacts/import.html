@@ -2,109 +2,119 @@
 
 {% block title %}Import Contacts &bull; Integra Outreach Control Center{% endblock %}
 
-{% block content %}
-<div class="container" style="padding-top: 1.5rem; padding-bottom: 2.5rem; max-width: 800px;">
+{% block breadcrumbs %}
+<span class="topbar-breadcrumb-item">Outreach</span>
+<span class="topbar-breadcrumb-sep">/</span>
+<a href="/contacts" class="topbar-breadcrumb-item">Contacts</a>
+<span class="topbar-breadcrumb-sep">/</span>
+<span class="topbar-breadcrumb-item active">Import</span>
+{% endblock %}
 
-  <!-- Breadcrumb -->
-  <div style="margin-bottom: 1rem;">
-    <a href="/contacts" style="color: var(--text-secondary); text-decoration: none; font-size: 0.9rem;">&larr; Back to Contacts</a>
+{% block content %}
+<div style="max-width: 800px; margin: 0 auto; padding-bottom: 2rem;">
+
+  <div style="margin-bottom: var(--space-4);">
+    <a href="/contacts" class="btn btn-outline btn-sm">&larr; Back to Contacts</a>
   </div>
 
-  <div class="card" style="padding: 2rem;">
-    <h1 style="font-size: 1.5rem; font-weight: 700; margin-bottom: 0.5rem;">Import Contacts (CSV)</h1>
-    <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">
-      Upload a CSV file containing audience contacts. Import uses a two-phase workflow: first verify in dry-run mode, then commit verified contacts.
-    </p>
-
-    <!-- Required format callout -->
-    <div class="card" style="background-color: var(--bg-main); border: 1px solid var(--border); padding: 1rem; margin-bottom: 1.5rem;">
-      <h4 style="font-size: 0.85rem; font-weight: 600; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.5rem;">Required CSV Columns</h4>
-      <p style="font-size: 0.85rem; margin-bottom: 0.5rem;">
-        <code>name</code>, <code>phone_number</code>, <code>country_code</code> (e.g. <code>20</code> or <code>EG</code>)
-      </p>
-      <h4 style="font-size: 0.85rem; font-weight: 600; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.5rem;">Optional Columns</h4>
-      <p style="font-size: 0.85rem;">
-        <code>company</code>, <code>city</code>, <code>consent_status</code> (<code>pending</code>, <code>opted_in</code>, <code>opted_out</code>)
-      </p>
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <h1 class="card-title" style="font-size: var(--text-xl);">Import Contacts (CSV)</h1>
+        <p class="card-subtitle">Two-phase audience ingestion: verify in dry-run mode before committing to database.</p>
+      </div>
     </div>
 
-    <div id="import-alert" class="alert" style="display: none; margin-bottom: 1.5rem;"></div>
+    <!-- Required format callout -->
+    <div style="background-color: var(--ids-canvas); border: 1px solid var(--ids-border); border-radius: var(--radius-sm); padding: var(--space-4); margin-bottom: var(--space-5);">
+      <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--ids-text-muted); margin-bottom: 4px;">Required CSV Columns</div>
+      <div style="font-size: 12px; margin-bottom: var(--space-3);">
+        <code>name</code>, <code>phone_number</code>, <code>country_code</code> (e.g. <code>20</code> or <code>EG</code>)
+      </div>
+      <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--ids-text-muted); margin-bottom: 4px;">Optional Columns</div>
+      <div style="font-size: 12px;">
+        <code>company</code>, <code>city</code>, <code>consent_status</code> (<code>pending</code>, <code>opted_in</code>, <code>opted_out</code>)
+      </div>
+    </div>
 
-    <!-- Step 1: File Input & Dry Run -->
+    <div id="import-alert" class="alert"></div>
+
+    <!-- Step 1: Upload & Dry Run -->
     <div id="step-upload">
       <div class="form-group">
-        <label for="csv-file-input">Select CSV File</label>
-        <input type="file" id="csv-file-input" accept=".csv" class="form-input" style="padding: 0.5rem;">
+        <label for="csv-file-input">Select CSV File *</label>
+        <input type="file" id="csv-file-input" accept=".csv" class="form-input" style="padding: 6px;">
       </div>
 
-      <div style="display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1.5rem;">
-        <a href="/contacts" class="btn btn-secondary" style="width: auto; text-decoration: none;">Cancel</a>
-        <button type="button" id="btn-dry-run" onclick="runDryRun()" class="btn btn-primary" style="width: auto;">
+      <div style="display: flex; justify-content: flex-end; gap: var(--space-3); margin-top: var(--space-5); border-top: 1px solid var(--ids-border); padding-top: var(--space-4);">
+        <a href="/contacts" class="btn btn-secondary">Cancel</a>
+        <button type="button" id="btn-dry-run" onclick="runDryRun()" class="btn btn-primary">
           1. Verify File (Dry Run)
         </button>
       </div>
     </div>
 
-    <!-- Step 2: Verification Results & Commit -->
-    <div id="step-results" style="display: none; margin-top: 1.5rem; border-top: 1px solid var(--border); padding-top: 1.5rem;">
-      <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 1rem;">Dry Run Verification Results</h3>
+    <!-- Step 2: Dry Run Results & Commit -->
+    <div id="step-results" style="display: none; margin-top: var(--space-5); border-top: 1px solid var(--ids-border); padding-top: var(--space-5);">
+      <div style="font-size: 14px; font-weight: 600; color: var(--ids-text-primary); margin-bottom: var(--space-3);">Dry Run Verification Results</div>
 
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 1rem; text-align: center; margin-bottom: 1.5rem;">
-        <div style="background: rgba(255,255,255,0.02); padding: 0.75rem; border-radius: var(--radius); border: 1px solid var(--border);">
-          <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Total Rows</div>
-          <div style="font-size: 1.3rem; font-weight: 700; margin-top: 0.2rem;" id="res-total">0</div>
+      <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--space-3); text-align: center; margin-bottom: var(--space-5);">
+        <div class="card card-compact" style="background: var(--ids-canvas);">
+          <div style="font-size: 10px; color: var(--ids-text-muted); text-transform: uppercase; font-weight: 600;">Total Rows</div>
+          <div style="font-size: 18px; font-weight: 700; margin-top: 2px;" id="res-total">0</div>
         </div>
-        <div style="background: rgba(255,255,255,0.02); padding: 0.75rem; border-radius: var(--radius); border: 1px solid var(--border);">
-          <div style="font-size: 0.75rem; color: var(--accent-green); text-transform: uppercase;">Valid</div>
-          <div style="font-size: 1.3rem; font-weight: 700; margin-top: 0.2rem; color: var(--accent-green);" id="res-valid">0</div>
+        <div class="card card-compact" style="background: var(--ids-canvas);">
+          <div style="font-size: 10px; color: var(--ids-success); text-transform: uppercase; font-weight: 600;">Valid</div>
+          <div style="font-size: 18px; font-weight: 700; color: var(--ids-success); margin-top: 2px;" id="res-valid">0</div>
         </div>
-        <div style="background: rgba(255,255,255,0.02); padding: 0.75rem; border-radius: var(--radius); border: 1px solid var(--border);">
-          <div style="font-size: 0.75rem; color: var(--accent-amber); text-transform: uppercase;">Duplicates</div>
-          <div style="font-size: 1.3rem; font-weight: 700; margin-top: 0.2rem; color: var(--accent-amber);" id="res-dupes">0</div>
+        <div class="card card-compact" style="background: var(--ids-canvas);">
+          <div style="font-size: 10px; color: var(--ids-warning); text-transform: uppercase; font-weight: 600;">Duplicates</div>
+          <div style="font-size: 18px; font-weight: 700; color: var(--ids-warning); margin-top: 2px;" id="res-dupes">0</div>
         </div>
-        <div style="background: rgba(255,255,255,0.02); padding: 0.75rem; border-radius: var(--radius); border: 1px solid var(--border);">
-          <div style="font-size: 0.75rem; color: var(--accent-red); text-transform: uppercase;">Invalid Phone</div>
-          <div style="font-size: 1.3rem; font-weight: 700; margin-top: 0.2rem; color: var(--accent-red);" id="res-invalid">0</div>
+        <div class="card card-compact" style="background: var(--ids-canvas);">
+          <div style="font-size: 10px; color: var(--ids-danger); text-transform: uppercase; font-weight: 600;">Invalid Phone</div>
+          <div style="font-size: 18px; font-weight: 700; color: var(--ids-danger); margin-top: 2px;" id="res-invalid">0</div>
         </div>
-        <div style="background: rgba(255,255,255,0.02); padding: 0.75rem; border-radius: var(--radius); border: 1px solid var(--border);">
-          <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Missing Fields</div>
-          <div style="font-size: 1.3rem; font-weight: 700; margin-top: 0.2rem;" id="res-missing">0</div>
+        <div class="card card-compact" style="background: var(--ids-canvas);">
+          <div style="font-size: 10px; color: var(--ids-text-muted); text-transform: uppercase; font-weight: 600;">Missing Fields</div>
+          <div style="font-size: 18px; font-weight: 700; margin-top: 2px;" id="res-missing">0</div>
         </div>
       </div>
 
       <!-- Preview Table -->
-      <h4 style="font-size: 0.95rem; font-weight: 600; margin-bottom: 0.5rem;">Sample Valid Contacts Preview</h4>
-      <div class="card" style="padding: 0; overflow: hidden; margin-bottom: 1.5rem; background: var(--bg-main);">
-        <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.85rem;">
+      <div style="font-size: 12px; font-weight: 600; color: var(--ids-text-secondary); margin-bottom: 6px;">Sample Valid Contacts Preview</div>
+      <div class="table-scroll-container" style="margin-bottom: var(--space-5);">
+        <table class="table" style="font-size: 12px;">
           <thead>
-            <tr style="border-bottom: 1px solid var(--border);">
-              <th style="padding: 0.5rem 0.75rem; color: var(--text-secondary);">Name</th>
-              <th style="padding: 0.5rem 0.75rem; color: var(--text-secondary);">Normalized E.164</th>
-              <th style="padding: 0.5rem 0.75rem; color: var(--text-secondary);">Country</th>
-              <th style="padding: 0.5rem 0.75rem; color: var(--text-secondary);">Company</th>
+            <tr>
+              <th>Name</th>
+              <th>Normalized E.164</th>
+              <th>Country</th>
+              <th>Company</th>
             </tr>
           </thead>
-          <tbody id="preview-table-body">
-          </tbody>
+          <tbody id="preview-table-body"></tbody>
         </table>
       </div>
 
-      <div style="display: flex; justify-content: flex-end; gap: 1rem;">
-        <button type="button" onclick="resetImport()" class="btn btn-secondary" style="width: auto;">Choose Different File</button>
-        <button type="button" id="btn-commit" onclick="commitImport()" class="btn btn-success" style="width: auto;">
+      <div style="display: flex; justify-content: flex-end; gap: var(--space-3);">
+        <button type="button" onclick="resetImport()" class="btn btn-secondary">Choose Different File</button>
+        <button type="button" id="btn-commit" onclick="commitImport()" class="btn btn-success">
           2. Commit & Import Contacts
         </button>
       </div>
     </div>
   </div>
+
 </div>
 
 <script>
-let selectedFile = null;
+let lastFile = null;
 
 async function runDryRun() {
   const fileInput = document.getElementById('csv-file-input');
   const alertBox = document.getElementById('import-alert');
+  const btn = document.getElementById('btn-dry-run');
   alertBox.style.display = 'none';
 
   if (!fileInput.files || fileInput.files.length === 0) {
@@ -114,110 +124,118 @@ async function runDryRun() {
     return;
   }
 
-  selectedFile = fileInput.files[0];
-  const btn = document.getElementById('btn-dry-run');
+  const file = fileInput.files[0];
+  lastFile = file;
+  const formData = new FormData();
+  formData.append('file', file);
+
   btn.disabled = true;
   btn.textContent = 'Verifying...';
 
-  const formData = new FormData();
-  formData.append('file', selectedFile);
-
   try {
-    const res = await fetch('/api/v1/contacts/import/dry-run', {
+    const res = await apiFetch('/api/v1/contacts/import/dry-run', {
       method: 'POST',
-      headers: {
-        'X-CSRF-Token': getCsrfToken(),
-      },
       body: formData
     });
     const result = await res.json();
-    btn.disabled = false;
-    btn.textContent = '1. Verify File (Dry Run)';
 
     if (res.ok && result.success) {
-      const d = result.data;
-      document.getElementById('res-total').textContent = d.total_rows;
-      document.getElementById('res-valid').textContent = d.valid_count;
-      document.getElementById('res-dupes').textContent = d.duplicate_count;
-      document.getElementById('res-invalid').textContent = d.invalid_phone_count;
-      document.getElementById('res-missing').textContent = d.missing_fields_count;
+      const data = result.data;
+      document.getElementById('res-total').textContent = data.total_rows;
+      document.getElementById('res-valid').textContent = data.valid_count;
+      document.getElementById('res-dupes').textContent = data.duplicate_count;
+      document.getElementById('res-invalid').textContent = data.invalid_phone_count;
+      document.getElementById('res-missing').textContent = data.missing_fields_count;
 
       const tbody = document.getElementById('preview-table-body');
       tbody.innerHTML = '';
-      if (d.preview && d.preview.length > 0) {
-        d.preview.forEach(row => {
+      if (data.sample_valid && data.sample_valid.length > 0) {
+        data.sample_valid.forEach(row => {
           const tr = document.createElement('tr');
-          tr.style.borderBottom = '1px solid rgba(255,255,255,0.03)';
           tr.innerHTML = `
-            <td style="padding: 0.5rem 0.75rem; font-weight: 600;">${row.name}</td>
-            <td style="padding: 0.5rem 0.75rem; font-family: monospace;">${row.phone_e164}</td>
-            <td style="padding: 0.5rem 0.75rem;">${row.country_code}</td>
-            <td style="padding: 0.5rem 0.75rem; color: var(--text-secondary);">${row.company || '—'}</td>
+            <td style="font-weight: 600;">${row.name || '—'}</td>
+            <td class="table-cell-mono">${row.phone_e164 || '—'}</td>
+            <td>${row.country_code || '—'}</td>
+            <td class="table-cell-muted">${row.company || '—'}</td>
           `;
           tbody.appendChild(tr);
         });
       } else {
-        tbody.innerHTML = '<tr><td colspan="4" style="padding: 1rem; text-align: center; color: var(--text-secondary);">No valid rows found to preview.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--ids-text-muted);">No valid contacts in sample preview</td></tr>';
       }
 
+      document.getElementById('step-upload').style.display = 'none';
       document.getElementById('step-results').style.display = 'block';
     } else {
       alertBox.className = 'alert alert-danger';
-      alertBox.textContent = result.error?.message || result.detail || 'CSV verification failed.';
+      alertBox.textContent = result.error?.message || result.detail || 'Dry run verification failed.';
       alertBox.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = '1. Verify File (Dry Run)';
     }
   } catch (err) {
+    alertBox.className = 'alert alert-danger';
+    alertBox.textContent = 'Network or server error during dry run.';
+    alertBox.style.display = 'block';
     btn.disabled = false;
     btn.textContent = '1. Verify File (Dry Run)';
-    alertBox.className = 'alert alert-danger';
-    alertBox.textContent = 'Network or server error verifying CSV.';
-    alertBox.style.display = 'block';
-  }
-}
-
-async function commitImport() {
-  if (!selectedFile) return;
-
-  const btn = document.getElementById('btn-commit');
-  const alertBox = document.getElementById('import-alert');
-  btn.disabled = true;
-  btn.textContent = 'Importing...';
-  alertBox.style.display = 'none';
-
-  const formData = new FormData();
-  formData.append('file', selectedFile);
-
-  try {
-    const res = await fetch('/api/v1/contacts/import/commit', {
-      method: 'POST',
-      headers: {
-        'X-CSRF-Token': getCsrfToken(),
-      },
-      body: formData
-    });
-    const result = await res.json();
-    if (res.ok && result.success) {
-      window.location.href = '/contacts';
-    } else {
-      btn.disabled = false;
-      btn.textContent = '2. Commit & Import Contacts';
-      alertBox.className = 'alert alert-danger';
-      alertBox.textContent = result.error?.message || result.detail || 'Failed to commit import.';
-      alertBox.style.display = 'block';
-    }
-  } catch (err) {
-    btn.disabled = false;
-    btn.textContent = '2. Commit & Import Contacts';
-    alertBox.className = 'alert alert-danger';
-    alertBox.textContent = 'Network or server error during import commit.';
-    alertBox.style.display = 'block';
   }
 }
 
 function resetImport() {
   document.getElementById('step-results').style.display = 'none';
+  document.getElementById('step-upload').style.display = 'block';
+  const btn = document.getElementById('btn-dry-run');
+  btn.disabled = false;
+  btn.textContent = '1. Verify File (Dry Run)';
   document.getElementById('csv-file-input').value = '';
-  selectedFile = null;
+  lastFile = null;
+}
+
+async function commitImport() {
+  const alertBox = document.getElementById('import-alert');
+  const btn = document.getElementById('btn-commit');
+  alertBox.style.display = 'none';
+
+  if (!lastFile) {
+    alertBox.className = 'alert alert-danger';
+    alertBox.textContent = 'File session lost. Please re-select the file.';
+    alertBox.style.display = 'block';
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('file', lastFile);
+
+  btn.disabled = true;
+  btn.textContent = 'Importing...';
+
+  try {
+    const res = await apiFetch('/api/v1/contacts/import/commit', {
+      method: 'POST',
+      body: formData
+    });
+    const result = await res.json();
+
+    if (res.ok && result.success) {
+      alertBox.className = 'alert alert-success';
+      alertBox.textContent = `Successfully imported ${result.data.imported_count} contacts.`;
+      alertBox.style.display = 'block';
+      setTimeout(() => { window.location.href = '/contacts'; }, 1200);
+    } else {
+      alertBox.className = 'alert alert-danger';
+      alertBox.textContent = result.error?.message || result.detail || 'Failed to commit import.';
+      alertBox.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = '2. Commit & Import Contacts';
+    }
+  } catch (err) {
+    alertBox.className = 'alert alert-danger';
+    alertBox.textContent = 'Network or server error committing import.';
+    alertBox.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = '2. Commit & Import Contacts';
+  }
 }
 </script>
 {% endblock %}

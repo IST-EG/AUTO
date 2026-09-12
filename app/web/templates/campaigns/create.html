@@ -2,98 +2,113 @@
 
 {% block title %}New Campaign &bull; Integra Outreach Control Center{% endblock %}
 
-{% block content %}
-<div class="container" style="padding-top: 1.5rem; padding-bottom: 2.5rem; max-width: 800px;">
+{% block breadcrumbs %}
+<span class="topbar-breadcrumb-item">Outreach</span>
+<span class="topbar-breadcrumb-sep">/</span>
+<a href="/campaigns" class="topbar-breadcrumb-item">Campaigns</a>
+<span class="topbar-breadcrumb-sep">/</span>
+<span class="topbar-breadcrumb-item active">New</span>
+{% endblock %}
 
-  <!-- Breadcrumb -->
-  <div style="margin-bottom: 1rem;">
-    <a href="/campaigns" style="color: var(--text-secondary); text-decoration: none; font-size: 0.9rem;">&larr; Back to Campaigns</a>
+{% block content %}
+<div style="max-width: 800px; margin: 0 auto; padding-bottom: 2rem;">
+
+  <div style="margin-bottom: var(--space-4);">
+    <a href="/campaigns" class="btn btn-outline btn-sm">&larr; Back to Campaigns</a>
   </div>
 
-  <div class="card" style="padding: 2rem;">
-    <h1 style="font-size: 1.5rem; font-weight: 700; margin-bottom: 0.5rem;">Create New Campaign</h1>
-    <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">
-      Configure campaign parameters and associate an immutable message template. New campaigns start in DRAFT state.
-    </p>
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <h1 class="card-title" style="font-size: var(--text-xl);">Create New Campaign</h1>
+        <p class="card-subtitle">Configure campaign parameters and attach an immutable message template. New campaigns start in DRAFT state.</p>
+      </div>
+    </div>
 
-    <div id="create-alert" class="alert" style="display: none; margin-bottom: 1.5rem;"></div>
+    <div id="create-alert" class="alert"></div>
 
     <form id="create-campaign-form">
+      <!-- Section 1: Campaign Identity -->
       <div class="form-group">
         <label for="campaign-name">Campaign Name *</label>
         <input type="text" id="campaign-name" class="form-input" required placeholder="e.g. Q4 Executive Outreach">
       </div>
 
-      <div class="form-group">
-        <label>Template Source</label>
-        <div style="display: flex; gap: 1rem; margin-bottom: 0.75rem;">
-          <label style="cursor: pointer; display: flex; align-items: center; gap: 0.4rem;">
+      <!-- Section 2: Template Source -->
+      <div class="form-group" style="border-top: 1px solid var(--ids-border); padding-top: var(--space-4); margin-top: var(--space-4);">
+        <label>Message Template Source *</label>
+        <div style="display: flex; gap: var(--space-5); margin-bottom: var(--space-3);">
+          <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-weight: normal; color: var(--ids-text-primary);">
             <input type="radio" name="template-source" value="library" checked onchange="toggleTemplateSource()">
             Select from Template Library
           </label>
-          <label style="cursor: pointer; display: flex; align-items: center; gap: 0.4rem;">
+          <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-weight: normal; color: var(--ids-text-primary);">
             <input type="radio" name="template-source" value="inline" onchange="toggleTemplateSource()">
-            Write Custom Template
+            Write Custom Inline Template
           </label>
         </div>
 
         <div id="library-template-select-box">
-          <select id="template-id-select" class="form-input" style="width: 100%;">
+          <select id="template-id-select" class="form-input">
             <option value="">-- Choose a template from library --</option>
             {% for t in templates_list %}
               <option value="{{ t.id }}">{{ t.name }} (v{{ t.latest_version }})</option>
             {% endfor %}
           </select>
-          <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.35rem;">
-            The template text will be snapshotted into this campaign at creation time.
-          </p>
+          <div style="font-size: 11px; color: var(--ids-text-muted); margin-top: 4px;">
+            The selected template version text will be permanently snapshotted into this campaign at creation time.
+          </div>
         </div>
 
         <div id="inline-template-box" style="display: none;">
           <textarea id="inline-template-text" class="form-input" rows="4" placeholder="Hi {{name}}, we noticed {{company}} is expanding in {{city}}..."></textarea>
-          <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.35rem;">
+          <div style="font-size: 11px; color: var(--ids-text-muted); margin-top: 4px;">
             Supported variables: <code>{{ '{{name}}' }}</code>, <code>{{ '{{company}}' }}</code>, <code>{{ '{{city}}' }}</code>, <code>{{ '{{campaign}}' }}</code>.
-          </p>
+          </div>
         </div>
       </div>
 
-      <h3 style="font-size: 1.1rem; font-weight: 600; margin-top: 1.5rem; margin-bottom: 1rem; border-top: 1px solid var(--border); padding-top: 1rem;">
-        Pacing & Safety Controls
-      </h3>
-
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-        <div class="form-group">
-          <label for="daily-limit">Daily Message Limit *</label>
-          <input type="number" id="daily-limit" class="form-input" value="100" min="1" required>
+      <!-- Section 3: Pacing Controls -->
+      <div style="border-top: 1px solid var(--ids-border); padding-top: var(--space-4); margin-top: var(--space-4);">
+        <div style="font-size: 14px; font-weight: 600; color: var(--ids-text-primary); margin-bottom: var(--space-3);">
+          Pacing & Safety Safeguards
         </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4);">
+          <div class="form-group">
+            <label for="daily-limit">Daily Message Limit *</label>
+            <input type="number" id="daily-limit" class="form-input" value="100" min="1" required>
+          </div>
+          <div class="form-group">
+            <label for="batch-size">Batch Size *</label>
+            <input type="number" id="batch-size" class="form-input" value="20" min="1" required>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4);">
+          <div class="form-group">
+            <label for="min-delay">Min Delay (seconds) *</label>
+            <input type="number" id="min-delay" class="form-input" value="10" min="1" required>
+          </div>
+          <div class="form-group">
+            <label for="max-delay">Max Delay (seconds) *</label>
+            <input type="number" id="max-delay" class="form-input" value="30" min="1" required>
+          </div>
+        </div>
+
         <div class="form-group">
-          <label for="batch-size">Batch Size *</label>
-          <input type="number" id="batch-size" class="form-input" value="20" min="1" required>
+          <label for="batch-pause">Batch Pause (seconds) *</label>
+          <input type="number" id="batch-pause" class="form-input" value="60" min="0" required>
         </div>
       </div>
 
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-        <div class="form-group">
-          <label for="min-delay">Min Delay (seconds) *</label>
-          <input type="number" id="min-delay" class="form-input" value="10" min="1" required>
-        </div>
-        <div class="form-group">
-          <label for="max-delay">Max Delay (seconds) *</label>
-          <input type="number" id="max-delay" class="form-input" value="30" min="1" required>
-        </div>
-      </div>
-
-      <div class="form-group">
-        <label for="batch-pause">Batch Pause (seconds) *</label>
-        <input type="number" id="batch-pause" class="form-input" value="60" min="0" required>
-      </div>
-
-      <div style="display: flex; justify-content: flex-end; gap: 1rem; margin-top: 2rem;">
-        <a href="/campaigns" class="btn btn-secondary" style="width: auto; text-decoration: none;">Cancel</a>
-        <button type="submit" id="btn-submit-campaign" class="btn btn-primary" style="width: auto;">Create Campaign</button>
+      <div style="display: flex; justify-content: flex-end; gap: var(--space-3); margin-top: var(--space-6); border-top: 1px solid var(--ids-border); padding-top: var(--space-4);">
+        <a href="/campaigns" class="btn btn-secondary">Cancel</a>
+        <button type="submit" id="btn-submit-campaign" class="btn btn-primary">Create Campaign</button>
       </div>
     </form>
   </div>
+
 </div>
 
 <script>
@@ -109,56 +124,57 @@ document.getElementById('create-campaign-form').addEventListener('submit', async
   const btn = document.getElementById('btn-submit-campaign');
   alertBox.style.display = 'none';
 
-  const isLibrary = document.querySelector('input[name="template-source"]:checked').value === 'library';
   const name = document.getElementById('campaign-name').value.trim();
-  const daily_limit = parseInt(document.getElementById('daily-limit').value, 10);
-  const batch_size = parseInt(document.getElementById('batch-size').value, 10);
-  const min_delay_seconds = parseInt(document.getElementById('min-delay').value, 10);
-  const max_delay_seconds = parseInt(document.getElementById('max-delay').value, 10);
-  const batch_pause_seconds = parseInt(document.getElementById('batch-pause').value, 10);
+  const dailyLimit = parseInt(document.getElementById('daily-limit').value, 10);
+  const batchSize = parseInt(document.getElementById('batch-size').value, 10);
+  const minDelay = parseInt(document.getElementById('min-delay').value, 10);
+  const maxDelay = parseInt(document.getElementById('max-delay').value, 10);
+  const batchPause = parseInt(document.getElementById('batch-pause').value, 10);
 
-  const payload = {
-    name: name,
-    daily_limit: daily_limit,
-    batch_size: batch_size,
-    min_delay_seconds: min_delay_seconds,
-    max_delay_seconds: max_delay_seconds,
-    batch_pause_seconds: batch_pause_seconds,
-  };
+  const isLibrary = document.querySelector('input[name="template-source"]:checked').value === 'library';
+  let templateId = null;
+  let messageTemplate = null;
 
   if (isLibrary) {
-    const tmplId = document.getElementById('template-id-select').value;
-    if (!tmplId) {
+    const sel = document.getElementById('template-id-select');
+    templateId = sel.value ? parseInt(sel.value, 10) : null;
+    if (!templateId) {
       alertBox.className = 'alert alert-danger';
       alertBox.textContent = 'Please select a template from the library.';
       alertBox.style.display = 'block';
       return;
     }
-    payload.template_id = parseInt(tmplId, 10);
   } else {
-    const rawText = document.getElementById('inline-template-text').value.trim();
-    if (!rawText) {
+    messageTemplate = document.getElementById('inline-template-text').value.trim();
+    if (!messageTemplate) {
       alertBox.className = 'alert alert-danger';
-      alertBox.textContent = 'Please provide message template text.';
+      alertBox.textContent = 'Please enter inline message template text.';
       alertBox.style.display = 'block';
       return;
     }
-    payload.message_template = rawText;
   }
 
   btn.disabled = true;
   btn.textContent = 'Creating...';
 
   try {
-    const res = await fetch('/api/v1/campaigns', {
+    const payload = {
+      name: name,
+      daily_limit: dailyLimit,
+      batch_size: batchSize,
+      min_delay_seconds: minDelay,
+      max_delay_seconds: maxDelay,
+      batch_pause_seconds: batchPause,
+    };
+    if (templateId) payload.template_id = templateId;
+    if (messageTemplate) payload.message_template = messageTemplate;
+
+    const res = await apiFetch('/api/v1/campaigns', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRF-Token': getCsrfToken(),
-      },
-      body: JSON.stringify(payload)
+      body: payload
     });
     const result = await res.json();
+
     if (res.ok && result.success) {
       window.location.href = `/campaigns/${result.data.id}`;
     } else {
@@ -170,7 +186,7 @@ document.getElementById('create-campaign-form').addEventListener('submit', async
     }
   } catch (err) {
     alertBox.className = 'alert alert-danger';
-    alertBox.textContent = 'Network or server error occurred.';
+    alertBox.textContent = 'Network or server error creating campaign.';
     alertBox.style.display = 'block';
     btn.disabled = false;
     btn.textContent = 'Create Campaign';

@@ -2,72 +2,79 @@
 
 {% block title %}Templates &bull; Integra Outreach Control Center{% endblock %}
 
+{% block breadcrumbs %}
+<span class="topbar-breadcrumb-item">Outreach</span>
+<span class="topbar-breadcrumb-sep">/</span>
+<span class="topbar-breadcrumb-item active">Templates</span>
+{% endblock %}
+
 {% block content %}
-<div class="container" style="padding-top: 1.5rem; padding-bottom: 2.5rem;">
+<div style="padding-bottom: 2rem;">
 
-  <!-- Nav Tabs -->
-  <nav class="nav-tabs">
-    <a href="/dashboard" class="nav-link">Dashboard</a>
-    <a href="/campaigns" class="nav-link">Campaigns</a>
-    <a href="/queue" class="nav-link">Queue</a>
-    <a href="/contacts" class="nav-link">Contacts</a>
-    <a href="/templates" class="nav-link active">Templates</a>
-    <span class="nav-link disabled">Analytics <span class="nav-badge-soon">Coming Soon</span></span>
-    <span class="nav-link disabled">WhatsApp <span class="nav-badge-soon">Coming Soon</span></span>
-    <span class="nav-link disabled">Settings <span class="nav-badge-soon">Coming Soon</span></span>
-  </nav>
-
-  <!-- Header -->
-  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+  <!-- Page Header -->
+  <div class="page-header">
     <div>
-      <h1 style="font-size: 1.85rem; font-weight: 800;">Message Templates</h1>
-      <p style="color: var(--text-secondary); font-size: 0.9rem;">Reusable outreach message library with immutable version tracking</p>
+      <h1 class="page-header-title">Message Templates</h1>
+      <p class="page-header-subtitle">Reusable outreach copy library with append-only immutable version tracking</p>
     </div>
-    <div>
-      <a href="/templates/new" class="btn btn-primary" style="width: auto;">+ New Template</a>
+    <div class="page-header-actions">
+      <a href="/templates/new" class="btn btn-primary">
+        <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2" style="margin-right: 4px;">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+        + New Template
+      </a>
     </div>
   </div>
 
   <!-- Templates Table -->
-  <div class="card" style="padding: 0; overflow: hidden;">
-    <table class="table" style="width: 100%; border-collapse: collapse; text-align: left;">
+  <div class="table-scroll-container">
+    <table class="table">
       <thead>
-        <tr style="background-color: rgba(255, 255, 255, 0.03); border-bottom: 1px solid var(--border);">
-          <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">ID</th>
-          <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">Template Name</th>
-          <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">Versions</th>
-          <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">Latest Content Preview</th>
-          <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">Created</th>
-          <th style="padding: 0.85rem 1rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; text-align: right;">Action</th>
+        <tr>
+          <th>ID</th>
+          <th>Template Name</th>
+          <th>Versions</th>
+          <th>Latest Content Preview</th>
+          <th>Created</th>
+          <th style="text-align: right;">Action</th>
         </tr>
       </thead>
       <tbody>
         {% if templates_list %}
           {% for t in templates_list %}
-          <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.05);">
-            <td style="padding: 0.85rem 1rem; font-size: 0.9rem; color: var(--text-secondary);">#{{ t.id }}</td>
-            <td style="padding: 0.85rem 1rem; font-weight: 600;">
-              <a href="/templates/{{ t.id }}" style="color: var(--text-primary); text-decoration: none;">{{ t.name }}</a>
+          <tr>
+            <td class="table-cell-mono table-cell-muted">#{{ t.id }}</td>
+            <td style="font-weight: 600;">
+              <a href="/templates/{{ t.id }}" style="color: var(--ids-text-primary);">{{ t.name }}</a>
               {% if t.description %}
-                <div style="font-size: 0.8rem; color: var(--text-secondary); font-weight: normal;">{{ t.description }}</div>
+                <div style="font-size: 11px; color: var(--ids-text-muted); font-weight: normal; margin-top: 2px;">{{ t.description }}</div>
               {% endif %}
             </td>
-            <td style="padding: 0.85rem 1rem;">
-              <span class="badge" style="background-color: var(--bg-input);">v{{ t.latest_version }} ({{ t.version_count }} total)</span>
+            <td>
+              <span class="sidebar-badge">v{{ t.latest_version }} ({{ t.version_count }} versions)</span>
             </td>
-            <td style="padding: 0.85rem 1rem; font-family: monospace; font-size: 0.85rem; color: var(--text-secondary); max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            <td class="table-cell-mono table-cell-muted" style="max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
               {{ t.latest_body }}
             </td>
-            <td style="padding: 0.85rem 1rem; font-size: 0.85rem; color: var(--text-secondary);">{{ t.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
-            <td style="padding: 0.85rem 1rem; text-align: right;">
-              <a href="/templates/{{ t.id }}" class="btn btn-secondary btn-sm" style="width: auto; text-decoration: none;">View History</a>
+            <td class="table-cell-muted" style="font-size: 12px;">{{ t.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+            <td class="table-cell-right">
+              <a href="/templates/{{ t.id }}" class="btn btn-secondary btn-sm">Version History &rarr;</a>
             </td>
           </tr>
           {% endfor %}
         {% else %}
           <tr>
-            <td colspan="6" style="padding: 3rem; text-align: center; color: var(--text-secondary);">
-              No templates created yet. <a href="/templates/new" style="color: var(--accent);">Create your first template</a>.
+            <td colspan="6">
+              <div class="empty-state">
+                <div class="empty-state-icon">📄</div>
+                <div class="empty-state-title">No templates created yet</div>
+                <div class="empty-state-desc">Author your first outreach message template with dynamic personalization variables.</div>
+                <div class="empty-state-actions">
+                  <a href="/templates/new" class="btn btn-primary">+ Create Message Template</a>
+                </div>
+              </div>
             </td>
           </tr>
         {% endif %}

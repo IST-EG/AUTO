@@ -3,197 +3,76 @@
 {% block title %}First-Run Setup &bull; Integra Outreach{% endblock %}
 
 {% block content %}
-<style>
-  body {
-    background-color: #0f172a !important;
-    color: #f8fafc !important;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
-    margin: 0;
-    padding: 0;
-  }
-  .brand {
-    color: #f8fafc !important;
-    text-decoration: none;
-    font-weight: bold;
-  }
-  .brand .badge {
-    background: #3b82f6;
-    color: white;
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-size: 0.75rem;
-    margin-left: 6px;
-  }
-  .header-content {
-    padding: 1rem 2rem;
-    border-bottom: 1px solid #334155;
-    background: #1e293b;
-  }
-  .auth-wrapper {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 80vh;
-    padding: 2rem;
-  }
-  .auth-card {
-    background: #1e293b !important;
-    border: 1px solid #334155 !important;
-    border-radius: 12px;
-    padding: 2.5rem;
-    max-width: 440px;
-    width: 100%;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
-  }
-  .card-title {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: #f8fafc !important;
-    margin-bottom: 0.5rem;
-  }
-  .card-subtitle {
-    font-size: 0.9rem;
-    color: #94a3b8 !important;
-    margin-bottom: 1.5rem;
-  }
-  .form-group {
-    margin-bottom: 1.25rem;
-  }
-  .form-group label {
-    display: block;
-    margin-bottom: 0.4rem;
-    font-size: 0.85rem;
-    font-weight: 500;
-    color: #cbd5e1 !important;
-  }
-  .form-group input {
-    width: 100%;
-    padding: 0.75rem 1rem;
-    border-radius: 8px;
-    background: #0f172a !important;
-    border: 1px solid #475569 !important;
-    color: #f8fafc !important;
-    font-size: 0.95rem;
-    box-sizing: border-box;
-    outline: none;
-    transition: border-color 0.2s;
-  }
-  .form-group input:focus {
-    border-color: #3b82f6 !important;
-  }
-  .btn-primary {
-    width: 100%;
-    padding: 0.85rem;
-    border-radius: 8px;
-    background: #2563eb !important;
-    color: white !important;
-    font-weight: 600;
-    font-size: 1rem;
-    border: none;
-    cursor: pointer;
-    transition: background 0.2s;
-    margin-top: 0.5rem;
-  }
-  .btn-primary:hover {
-    background: #1d4ed8 !important;
-  }
-  .btn-primary:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-  .alert {
-    padding: 0.85rem 1rem;
-    border-radius: 8px;
-    margin-bottom: 1.25rem;
-    font-size: 0.875rem;
-    display: none;
-  }
-  .alert-error {
-    background: rgba(239, 68, 68, 0.15) !important;
-    border: 1px solid #ef4444 !important;
-    color: #fca5a5 !important;
-    display: block !important;
-  }
-  .alert-success {
-    background: rgba(16, 185, 129, 0.15) !important;
-    border: 1px solid #10b981 !important;
-    color: #6ee7b7 !important;
-    display: block !important;
-  }
-  footer {
-    text-align: center;
-    padding: 1.5rem;
-    color: #64748b !important;
-    font-size: 0.85rem;
-    border-top: 1px solid #334155;
-  }
-</style>
-
 <div class="auth-wrapper">
-  <div class="card auth-card">
-    <h1 class="card-title">Initial System Setup</h1>
-    <p class="card-subtitle">Create the initial primary OWNER account for the Outreach Control Center.</p>
+  <div class="auth-card">
+    <div class="auth-brand">
+      <div class="auth-brand-logo">❖</div>
+      <div>
+        <div style="font-size: 14px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;">Integra</div>
+        <div style="font-size: 11px; color: var(--ids-text-muted);">First-Run Setup</div>
+      </div>
+    </div>
 
-    <div id="alert-box" class="alert {% if error_message %}alert-error{% endif %}" {% if error_message %}style="display: block;"{% endif %}>{{ error_message or '' }}</div>
+    <h1 class="auth-title">Initial System Setup</h1>
+    <p class="auth-subtitle">Create OWNER Account to initialize the control plane.</p>
 
-    <form id="setup-form" action="/setup" method="POST">
+    {% if error_message %}
+      <div class="alert alert-error" style="display: block;">{{ error_message }}</div>
+    {% endif %}
+
+    <div id="alert-box" class="alert"></div>
+
+    <form id="setup-form" method="POST" action="/setup">
       <div class="form-group">
-        <label for="username">Owner Username</label>
-        <input type="text" id="username" name="username" value="{{ username or '' }}" required autofocus placeholder="e.g. admin">
+        <label for="username">Owner Username *</label>
+        <input type="text" id="username" name="username" required autofocus placeholder="admin" value="{{ username or '' }}" class="form-input">
       </div>
 
       <div class="form-group">
-        <label for="email">Owner Email</label>
-        <input type="email" id="email" name="email" value="{{ email or '' }}" required placeholder="admin@integra-ist.com">
+        <label for="email">Owner Email *</label>
+        <input type="email" id="email" name="email" required placeholder="admin@integra-ist.com" value="{{ email or '' }}" class="form-input">
       </div>
 
       <div class="form-group">
-        <label for="password">Strong Password</label>
-        <input type="password" id="password" name="password" required placeholder="Min 12 chars (upper, lower, digit, symbol)">
+        <label for="password">Password *</label>
+        <input type="password" id="password" name="password" required placeholder="Minimum 12 characters" class="form-input">
+        <div style="font-size: 11px; color: var(--ids-text-muted); margin-top: 4px;">
+          Must include uppercase, lowercase, digit, and special symbol.
+        </div>
       </div>
 
       <div class="form-group">
-        <label for="confirm_password">Confirm Password</label>
-        <input type="password" id="confirm_password" name="confirm_password" required placeholder="Re-enter password">
+        <label for="confirm_password">Confirm Password *</label>
+        <input type="password" id="confirm_password" name="confirm_password" required placeholder="Re-enter password" class="form-input">
       </div>
 
-      <button type="submit" id="submit-btn" class="btn btn-primary">Create OWNER Account</button>
+      <button type="submit" id="submit-btn" class="btn btn-primary" style="width: 100%; margin-top: var(--space-2);">Create OWNER Account</button>
     </form>
   </div>
 </div>
 
 <script>
-  function _hideAlert(id) {
-    const el = document.getElementById(id);
-    if (el) {
-      el.style.display = 'none';
-      el.textContent = '';
-    }
-  }
+  // Ensure fresh CSRF token
+  fetch('/api/v1/auth/csrf');
 
-  function _showAlert(id, message, type = 'error') {
-    const el = document.getElementById(id);
-    if (el) {
-      el.className = `alert alert-${type}`;
-      el.textContent = message;
-      el.style.display = 'block';
-    }
-  }
-
-  document.getElementById('setup-form').addEventListener('submit', function (e) {
+  document.getElementById('setup-form').addEventListener('submit', async function(e) {
     const password = document.getElementById('password').value;
-    const confirmPassword = document.getElementById('confirm_password').value;
+    const confirm = document.getElementById('confirm_password').value;
+    const alertEl = document.getElementById('alert-box');
 
-    if (password !== confirmPassword) {
+    if (password !== confirm) {
       e.preventDefault();
-      _showAlert('alert-box', 'Passwords do not match.', 'error');
-      return false;
+      alertEl.className = 'alert alert-error';
+      alertEl.textContent = 'Passwords do not match.';
+      alertEl.style.display = 'block';
+      return;
     }
 
     const btn = document.getElementById('submit-btn');
     btn.disabled = true;
     btn.textContent = 'Creating Account...';
-    // Form submits natively via POST to /setup
+
+    // Allow native HTML POST to proceed cleanly
   });
 </script>
 {% endblock %}
