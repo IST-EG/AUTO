@@ -3,6 +3,132 @@
 {% block title %}First-Run Setup &bull; Integra Outreach{% endblock %}
 
 {% block content %}
+<style>
+  body {
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+    margin: 0;
+    padding: 0;
+  }
+  .brand {
+    color: #f8fafc !important;
+    text-decoration: none;
+    font-weight: bold;
+  }
+  .brand .badge {
+    background: #3b82f6;
+    color: white;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    margin-left: 6px;
+  }
+  .header-content {
+    padding: 1rem 2rem;
+    border-bottom: 1px solid #334155;
+    background: #1e293b;
+  }
+  .auth-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 80vh;
+    padding: 2rem;
+  }
+  .auth-card {
+    background: #1e293b !important;
+    border: 1px solid #334155 !important;
+    border-radius: 12px;
+    padding: 2.5rem;
+    max-width: 440px;
+    width: 100%;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+  }
+  .card-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #f8fafc !important;
+    margin-bottom: 0.5rem;
+  }
+  .card-subtitle {
+    font-size: 0.9rem;
+    color: #94a3b8 !important;
+    margin-bottom: 1.5rem;
+  }
+  .form-group {
+    margin-bottom: 1.25rem;
+  }
+  .form-group label {
+    display: block;
+    margin-bottom: 0.4rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #cbd5e1 !important;
+  }
+  .form-group input {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    background: #0f172a !important;
+    border: 1px solid #475569 !important;
+    color: #f8fafc !important;
+    font-size: 0.95rem;
+    box-sizing: border-box;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .form-group input:focus {
+    border-color: #3b82f6 !important;
+  }
+  .btn-primary {
+    width: 100%;
+    padding: 0.85rem;
+    border-radius: 8px;
+    background: #2563eb !important;
+    color: white !important;
+    font-weight: 600;
+    font-size: 1rem;
+    border: none;
+    cursor: pointer;
+    transition: background 0.2s;
+    margin-top: 0.5rem;
+  }
+  .btn-primary:hover {
+    background: #1d4ed8 !important;
+  }
+  .btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  .alert {
+    padding: 0.85rem 1rem;
+    border-radius: 8px;
+    margin-bottom: 1.25rem;
+    font-size: 0.875rem;
+    display: none;
+  }
+  .alert-error {
+    background: rgba(239, 68, 68, 0.15) !important;
+    border: 1px solid #ef4444 !important;
+    color: #fca5a5 !important;
+    display: block !important;
+  }
+  .alert-success {
+    background: rgba(16, 185, 129, 0.15) !important;
+    border: 1px solid #10b981 !important;
+    color: #6ee7b7 !important;
+    display: block !important;
+  }
+  footer {
+    text-align: center;
+    padding: 1.5rem;
+    color: #64748b !important;
+    font-size: 0.85rem;
+    border-top: 1px solid #334155;
+  }
+</style>
+
 <div class="auth-wrapper">
   <div class="card auth-card">
     <h1 class="card-title">Initial System Setup</h1>
@@ -37,26 +163,20 @@
 </div>
 
 <script>
-  // Defensive fallbacks in case client bundle is unavailable or loading
   function _hideAlert(id) {
-    if (typeof hideAlert === 'function') {
-      hideAlert(id);
-    } else {
-      const el = document.getElementById(id);
-      if (el) el.style.display = 'none';
+    const el = document.getElementById(id);
+    if (el) {
+      el.style.display = 'none';
+      el.textContent = '';
     }
   }
 
   function _showAlert(id, message, type = 'error') {
-    if (typeof showAlert === 'function') {
-      showAlert(id, message, type);
-    } else {
-      const el = document.getElementById(id);
-      if (el) {
-        el.className = `alert alert-${type}`;
-        el.textContent = message;
-        el.style.display = 'block';
-      }
+    const el = document.getElementById(id);
+    if (el) {
+      el.className = `alert alert-${type}`;
+      el.textContent = message;
+      el.style.display = 'block';
     }
   }
 
@@ -69,13 +189,13 @@
     const password = document.getElementById('password').value;
     const confirmPassword = document.getElementById('confirm_password').value;
 
-    if (password !== confirmPassword) {
-      _showAlert('alert-box', 'Passwords do not match.', 'error');
+    if (!username || !email || !password) {
+      _showAlert('alert-box', 'All fields are required.', 'error');
       return;
     }
 
-    if (typeof apiFetch !== 'function') {
-      _showAlert('alert-box', 'Application assets are still loading or unavailable. Please refresh the page.', 'error');
+    if (password !== confirmPassword) {
+      _showAlert('alert-box', 'Passwords do not match.', 'error');
       return;
     }
 
@@ -84,9 +204,13 @@
     btn.textContent = 'Creating Account...';
 
     try {
-      const resp = await apiFetch('/api/v1/setup/bootstrap', {
+      const resp = await fetch('/api/v1/setup/bootstrap', {
         method: 'POST',
-        body: { username, email, password }
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({ username, email, password })
       });
       const data = await resp.json();
 
@@ -103,7 +227,7 @@
         btn.textContent = 'Create OWNER Account';
       }
     } catch (err) {
-      _showAlert('alert-box', 'Network error. Please try again.', 'error');
+      _showAlert('alert-box', 'Network error. Please check your connection and try again.', 'error');
       btn.disabled = false;
       btn.textContent = 'Create OWNER Account';
     }
