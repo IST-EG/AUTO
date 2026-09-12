@@ -3,11 +3,11 @@ Timezone and calendar boundary helper.
 
 Anchors all calendar semantics to APP_TIMEZONE (default: Africa/Cairo) and converts
 boundaries to UTC half-open intervals [start_utc, end_utc) for database queries.
+Uses pure Python standard library (zero external dependencies).
 """
 
-from datetime import datetime, date, timedelta, timezone
+from datetime import datetime, date, timedelta, timezone, tzinfo
 from typing import Tuple, Optional, Union, NamedTuple
-import pytz
 
 from app.utils.settings import settings
 
@@ -22,13 +22,17 @@ class CalendarRange(NamedTuple):
     end_local_str: str
 
 
-def get_app_timezone() -> pytz.BaseTzInfo:
-    """Returns the authoritative application timezone."""
+def get_app_timezone() -> tzinfo:
+    """Returns the authoritative application timezone using Python standard library."""
     tz_name = getattr(settings, "APP_TIMEZONE", "Africa/Cairo")
     try:
-        return pytz.timezone(tz_name)
+        import zoneinfo
+        return zoneinfo.ZoneInfo(tz_name)
     except Exception:
-        return pytz.timezone("Africa/Cairo")
+        pass
+    # Standard library fallback for Python 3.8 or environments without tzdata
+    # Africa/Cairo is fixed at UTC+3 (Egypt Standard Time)
+    return timezone(timedelta(hours=3), name=tz_name)
 
 
 def resolve_calendar_range(
@@ -81,11 +85,11 @@ def resolve_calendar_range(
             if s_dt > e_dt:
                 s_dt, e_dt = e_dt, s_dt
 
-            start_local_dt = tz.localize(datetime(s_dt.year, s_dt.month, s_dt.day, 0, 0, 0))
-            end_local_dt = tz.localize(datetime(e_dt.year, e_dt.month, e_dt.day, 0, 0, 0)) + timedelta(days=1)
+            start_local_dt = datetime(s_dt.year, s_dt.month, s_dt.day, 0, 0, 0, tzinfo=tz)
+            end_local_dt = datetime(e_dt.year, e_dt.month, e_dt.day, 0, 0, 0, tzinfo=tz) + timedelta(days=1)
 
-            start_utc = start_local_dt.astimezone(pytz.UTC)
-            end_utc = end_local_dt.astimezone(pytz.UTC)
+            start_utc = start_local_dt.astimezone(timezone.utc)
+            end_utc = end_local_dt.astimezone(timezone.utc)
             return CalendarRange(
                 start_utc=start_utc,
                 end_utc=end_utc,
@@ -98,7 +102,7 @@ def resolve_calendar_range(
             # Fall back to preset
             pass
 
-    start_today_local = tz.localize(datetime(today_local.year, today_local.month, today_local.day, 0, 0, 0))
+    start_today_local = datetime(today_local.year, today_local.month, today_local.day, 0, 0, 0, tzinfo=tz)
     end_today_local = start_today_local + timedelta(days=1)
 
     if norm_preset == "today":
@@ -119,8 +123,8 @@ def resolve_calendar_range(
         end_local = end_today_local
         resolved = "last_7_days"
 
-    start_utc = start_local.astimezone(pytz.UTC)
-    end_utc = end_local.astimezone(pytz.UTC)
+    start_utc = start_local.astimezone(timezone.utc)
+    end_utc = end_local.astimezone(timezone.utc)
 
     return CalendarRange(
         start_utc=start_utc,
