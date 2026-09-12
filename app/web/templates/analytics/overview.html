@@ -1,0 +1,329 @@
+{% extends "base.html" %}
+
+{% block title %}Analytics &amp; Reporting &bull; Integra Outreach Control Center{% endblock %}
+
+{% block breadcrumbs %}
+<span class="topbar-breadcrumb-item">Insights</span>
+<span class="topbar-breadcrumb-sep">/</span>
+<span class="topbar-breadcrumb-item active">Analytics &amp; Reporting</span>
+{% endblock %}
+
+{% block content %}
+<div style="padding-bottom: 2.5rem;">
+
+  <!-- Page Header -->
+  <div class="page-header">
+    <div>
+      <h1 class="page-header-title">Analytics &amp; Reporting</h1>
+      <p class="page-header-subtitle">Authoritative dispatch metrics and campaign performance supervision</p>
+    </div>
+    <div class="page-header-actions">
+      {% if current_user.role in ['OWNER', 'ADMIN', 'OPERATOR'] %}
+      <a href="/api/v1/analytics/export/summary?preset={{ preset }}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}" class="btn btn-secondary btn-sm" download>
+        <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2" style="margin-right: 6px;">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="7 10 12 15 17 10"></polyline>
+          <line x1="12" y1="15" x2="12" y2="3"></line>
+        </svg>
+        Export Summary CSV
+      </a>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Mandatory Semantic Disclaimer Banner -->
+  <div class="card" style="margin-bottom: var(--space-5); border-left: 4px solid var(--ids-primary); background: var(--ids-surface-elevated); padding: 12px 18px;">
+    <div style="display: flex; align-items: center; gap: 12px; font-size: var(--text-xs); color: var(--ids-text-secondary); line-height: 1.5;">
+      <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" style="color: var(--ids-primary); flex-shrink: 0;">
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="12" y1="16" x2="12" y2="12"></line>
+        <line x1="12" y1="8" x2="12.01" y2="8"></line>
+      </svg>
+      <div>
+        <strong style="color: var(--ids-text-primary);">CONFIRMED SEND RATE</strong> is calculated exclusively from UI-confirmed dispatches. WhatsApp Web does not provide delivery or read receipts.
+      </div>
+    </div>
+  </div>
+
+  <!-- Filter Toolbar & Timezone Indicator -->
+  <div class="card" style="margin-bottom: var(--space-5); padding: var(--space-4);">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--space-4);">
+      <!-- Presets Toolbar -->
+      <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <span style="font-size: var(--text-xs); font-weight: 600; color: var(--ids-text-muted); text-transform: uppercase; margin-right: 4px;">Time Window:</span>
+        <a href="/analytics?preset=today" class="btn btn-sm {% if preset == 'today' %}btn-primary{% else %}btn-secondary{% endif %}">Today</a>
+        <a href="/analytics?preset=yesterday" class="btn btn-sm {% if preset == 'yesterday' %}btn-primary{% else %}btn-secondary{% endif %}">Yesterday</a>
+        <a href="/analytics?preset=last_7_days" class="btn btn-sm {% if preset == 'last_7_days' %}btn-primary{% else %}btn-secondary{% endif %}">Last 7 Days</a>
+        <a href="/analytics?preset=last_30_days" class="btn btn-sm {% if preset == 'last_30_days' %}btn-primary{% else %}btn-secondary{% endif %}">Last 30 Days</a>
+      </div>
+
+      <!-- Custom Date Picker Form -->
+      <form method="GET" action="/analytics" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <input type="hidden" name="preset" value="custom">
+        <label style="font-size: var(--text-xs); color: var(--ids-text-muted);">From:</label>
+        <input type="date" name="start_date" value="{{ start_date }}" class="form-input" style="padding: 4px 8px; font-size: var(--text-xs); width: 130px; height: 32px;" required>
+        <label style="font-size: var(--text-xs); color: var(--ids-text-muted);">To:</label>
+        <input type="date" name="end_date" value="{{ end_date }}" class="form-input" style="padding: 4px 8px; font-size: var(--text-xs); width: 130px; height: 32px;" required>
+        <button type="submit" class="btn btn-secondary btn-sm" style="height: 32px;">Apply</button>
+      </form>
+    </div>
+
+    <!-- Active Window Telemetry Badge -->
+    <div style="margin-top: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--ids-border); display: flex; justify-content: space-between; align-items: center; font-size: var(--text-xs); color: var(--ids-text-secondary); flex-wrap: wrap; gap: 8px;">
+      <div>
+        <span>Authority: </span>
+        <strong style="color: var(--ids-text-primary); font-family: var(--font-mono);">{{ overview.date_range.timezone }}</strong>
+        <span style="margin: 0 8px;">&bull;</span>
+        <span>Local Interval: </span>
+        <span style="font-family: var(--font-mono); color: var(--ids-text-primary);">{{ overview.date_range.start_date_local }} &rarr; {{ overview.date_range.end_date_local }}</span>
+      </div>
+      <div>
+        <span style="color: var(--ids-text-muted);">UTC Query Bounds: </span>
+        <span style="font-family: var(--font-mono); font-size: 11px;">[{{ overview.date_range.start_date_utc[:19] }}Z &mdash; {{ overview.date_range.end_date_utc[:19] }}Z)</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- PRIMARY KPI GRID -->
+  <div class="kpi-grid" style="margin-bottom: var(--space-6);">
+    <!-- KPI 1: Confirmed Sends -->
+    <div class="kpi-card">
+      <div class="kpi-label">Confirmed Sends</div>
+      <div class="kpi-value" style="color: var(--ids-success);">
+        {{ overview.kpis.confirmed_sends }}
+      </div>
+      <div class="kpi-subtext">UI-confirmed message dispatches in window</div>
+    </div>
+
+    <!-- KPI 2: Confirmed Send Rate -->
+    <div class="kpi-card">
+      <div class="kpi-label">CONFIRMED SEND RATE</div>
+      <div class="kpi-value" style="color: var(--ids-primary);">
+        {{ "%.2f"|format(overview.kpis.confirmed_send_rate) }}%
+      </div>
+      <div class="kpi-subtext">confirmed / (confirmed + failed + unknown)</div>
+    </div>
+
+    <!-- KPI 3: Permanent Failures -->
+    <div class="kpi-card">
+      <div class="kpi-label">Permanent Failures</div>
+      <div class="kpi-value" style="color: var(--ids-danger);">
+        {{ overview.kpis.permanent_failures }}
+      </div>
+      <div class="kpi-subtext">Terminal non-retryable dispatch errors</div>
+    </div>
+
+    <!-- KPI 4: Unknown Outcomes -->
+    <div class="kpi-card">
+      <div class="kpi-label">UNKNOWN OUTCOME</div>
+      <div class="kpi-value" style="color: var(--ids-warning);">
+        {{ overview.kpis.unknown_outcomes }}
+      </div>
+      <div class="kpi-subtext">Ambiguous dispatches requiring verification</div>
+    </div>
+  </div>
+
+  <!-- LIVE QUEUE HEALTH SNAPSHOT STRIP -->
+  <div class="card" style="margin-bottom: var(--space-6); background: var(--ids-surface-elevated);">
+    <div class="card-header" style="margin-bottom: var(--space-3);">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span class="pulse-dot pulse"></span>
+        <h2 style="font-size: var(--text-sm); font-weight: 700; color: var(--ids-text-primary); text-transform: uppercase; letter-spacing: 0.05em; margin: 0;">
+          Current Queue Health (Live Point-in-Time Snapshot)
+        </h2>
+      </div>
+      <span style="font-size: 11px; color: var(--ids-text-muted);">Zero date filtering &bull; Evaluated right now</span>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--space-3);">
+      <div style="background: var(--ids-surface); border: 1px solid var(--ids-border); border-radius: var(--radius-sm); padding: 10px 14px;">
+        <div style="font-size: 11px; color: var(--ids-text-muted); text-transform: uppercase;">Queued</div>
+        <div style="font-size: var(--text-xl); font-weight: 700; color: var(--ids-text-primary); font-family: var(--font-mono); margin-top: 2px;">
+          {{ overview.live_queue_snapshot.queued_count }}
+        </div>
+      </div>
+
+      <div style="background: var(--ids-surface); border: 1px solid var(--ids-border); border-radius: var(--radius-sm); padding: 10px 14px;">
+        <div style="font-size: 11px; color: var(--ids-text-muted); text-transform: uppercase;">Processing</div>
+        <div style="font-size: var(--text-xl); font-weight: 700; color: var(--ids-info); font-family: var(--font-mono); margin-top: 2px;">
+          {{ overview.live_queue_snapshot.processing_count }}
+        </div>
+      </div>
+
+      <div style="background: var(--ids-surface); border: 1px solid var(--ids-border); border-radius: var(--radius-sm); padding: 10px 14px;">
+        <div style="font-size: 11px; color: var(--ids-text-muted); text-transform: uppercase;">Retry Pending</div>
+        <div style="font-size: var(--text-xl); font-weight: 700; color: #C084FC; font-family: var(--font-mono); margin-top: 2px;">
+          {{ overview.live_queue_snapshot.retry_pending_count }}
+        </div>
+      </div>
+
+      <div style="background: var(--ids-surface); border: 1px solid var(--ids-border); border-radius: var(--radius-sm); padding: 10px 14px;">
+        <div style="font-size: 11px; color: var(--ids-text-muted); text-transform: uppercase;">Unknown Outcome</div>
+        <div style="font-size: var(--text-xl); font-weight: 700; color: var(--ids-warning); font-family: var(--font-mono); margin-top: 2px;">
+          {{ overview.live_queue_snapshot.unknown_outcome_count }}
+        </div>
+      </div>
+
+      <div style="background: var(--ids-surface); border: 1px solid var(--ids-border); border-radius: var(--radius-sm); padding: 10px 14px;">
+        <div style="font-size: 11px; color: var(--ids-text-muted); text-transform: uppercase;">Stale Leases (&gt;120s)</div>
+        <div style="font-size: var(--text-xl); font-weight: 700; color: {% if overview.live_queue_snapshot.stale_leases_count > 0 %}var(--ids-danger){% else %}var(--ids-text-primary){% endif %}; font-family: var(--font-mono); margin-top: 2px;">
+          {{ overview.live_queue_snapshot.stale_leases_count }}
+        </div>
+      </div>
+
+      <div style="background: var(--ids-surface); border: 1px solid var(--ids-border); border-radius: var(--radius-sm); padding: 10px 14px;">
+        <div style="font-size: 11px; color: var(--ids-text-muted); text-transform: uppercase;">Circuit Breaker</div>
+        <div style="margin-top: 4px;">
+          <span class="status-pill status-{{ overview.live_queue_snapshot.circuit_breaker_status.lower() }}">
+            {{ overview.live_queue_snapshot.circuit_breaker_status }}
+          </span>
+        </div>
+      </div>
+
+      <div style="background: var(--ids-surface); border: 1px solid var(--ids-border); border-radius: var(--radius-sm); padding: 10px 14px;">
+        <div style="font-size: 11px; color: var(--ids-text-muted); text-transform: uppercase;">Emergency Stop</div>
+        <div style="margin-top: 4px;">
+          <span class="status-pill {% if overview.live_queue_snapshot.emergency_stop_status == 'ACTIVE' %}status-armed{% else %}status-disarmed{% endif %}">
+            {{ overview.live_queue_snapshot.emergency_stop_status }}
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DISPATCH THROUGHPUT TIMELINE (Pure SVG) -->
+  <div class="card" style="margin-bottom: var(--space-6);">
+    <div class="card-header">
+      <div>
+        <h2 style="font-size: var(--text-base); font-weight: 700; color: var(--ids-text-primary); margin: 0;">
+          Dispatch Throughput Timeline
+        </h2>
+        <p style="font-size: var(--text-xs); color: var(--ids-text-secondary); margin-top: 2px;">
+          Confirmed message dispatches over selected interval
+        </p>
+      </div>
+    </div>
+
+    {% if overview.throughput_timeline %}
+      <div style="width: 100%; overflow-x: auto; padding: var(--space-2) 0;">
+        <div style="min-width: 600px; height: 180px; position: relative;">
+          <!-- Inline pure SVG Histogram -->
+          {% set max_sends = [overview.throughput_timeline|map(attribute='confirmed_sends')|max, 1]|max %}
+          <svg viewBox="0 0 800 160" width="100%" height="160" preserveAspectRatio="none" style="display: block;">
+            <!-- Grid lines -->
+            <line x1="0" y1="40" x2="800" y2="40" stroke="var(--ids-border)" stroke-dasharray="3,3" />
+            <line x1="0" y1="80" x2="800" y2="80" stroke="var(--ids-border)" stroke-dasharray="3,3" />
+            <line x1="0" y1="120" x2="800" y2="120" stroke="var(--ids-border)" stroke-dasharray="3,3" />
+            <line x1="0" y1="150" x2="800" y2="150" stroke="var(--ids-border-strong)" />
+
+            {% set bar_count = overview.throughput_timeline|length %}
+            {% set bar_width = 800 / bar_count %}
+            {% for pt in overview.throughput_timeline %}
+              {% set bar_h = (pt.confirmed_sends / max_sends) * 130 %}
+              {% set bar_x = loop.index0 * bar_width + (bar_width * 0.15) %}
+              {% set rect_w = bar_width * 0.7 %}
+              {% set bar_y = 150 - bar_h %}
+              <rect x="{{ bar_x }}" y="{{ bar_y }}" width="{{ rect_w }}" height="{{ bar_h }}" fill="var(--ids-primary)" rx="3" opacity="0.85">
+                <title>{{ pt.date }}: {{ pt.confirmed_sends }} confirmed sends</title>
+              </rect>
+            {% endfor %}
+          </svg>
+
+          <!-- X-Axis Labels -->
+          <div style="display: flex; justify-content: space-between; margin-top: 6px; font-size: 10px; color: var(--ids-text-muted); font-family: var(--font-mono);">
+            <span>{{ overview.throughput_timeline[0].date }}</span>
+            {% if overview.throughput_timeline|length > 2 %}
+            <span>{{ overview.throughput_timeline[(overview.throughput_timeline|length // 2)].date }}</span>
+            {% endif %}
+            <span>{{ overview.throughput_timeline[-1].date }}</span>
+          </div>
+        </div>
+      </div>
+    {% else %}
+      <div style="text-align: center; padding: var(--space-8); color: var(--ids-text-muted); font-size: var(--text-sm);">
+        No confirmed dispatches recorded in this time window.
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- CAMPAIGN PERFORMANCE TABLE -->
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <h2 style="font-size: var(--text-base); font-weight: 700; color: var(--ids-text-primary); margin: 0;">
+          Campaign Performance
+        </h2>
+        <p style="font-size: var(--text-xs); color: var(--ids-text-secondary); margin-top: 2px;">
+          Cardinality-safe campaign execution metrics
+        </p>
+      </div>
+    </div>
+
+    <div class="table-container">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Campaign Name</th>
+            <th>Status</th>
+            <th style="text-align: right;">Confirmed Sends</th>
+            <th style="text-align: right;">Failures</th>
+            <th style="text-align: right;">Unknown Outcome</th>
+            <th style="text-align: right;">Confirmed Send Rate</th>
+            <th style="text-align: right;">Contact Completion %</th>
+            <th style="text-align: right;">Queue Terminal %</th>
+            <th style="text-align: center;">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if overview.campaign_performance %}
+            {% for item in overview.campaign_performance %}
+            <tr>
+              <td>
+                <a href="/analytics/campaigns/{{ item.campaign_id }}" style="font-weight: 600; color: var(--ids-text-primary); text-decoration: none;">
+                  {{ item.name }}
+                </a>
+              </td>
+              <td>
+                <span class="status-pill status-{{ item.status.lower() }}">
+                  {{ item.status }}
+                </span>
+              </td>
+              <td style="text-align: right; font-family: var(--font-mono); font-weight: 600; color: var(--ids-success);">
+                {{ item.confirmed_sends }}
+              </td>
+              <td style="text-align: right; font-family: var(--font-mono); color: {% if item.failed > 0 %}var(--ids-danger){% else %}var(--ids-text-muted){% endif %};">
+                {{ item.failed }}
+              </td>
+              <td style="text-align: right; font-family: var(--font-mono); color: {% if item.unknown_outcome > 0 %}var(--ids-warning){% else %}var(--ids-text-muted){% endif %};">
+                {{ item.unknown_outcome }}
+              </td>
+              <td style="text-align: right; font-family: var(--font-mono); font-weight: 600; color: var(--ids-primary);">
+                {{ "%.2f"|format(item.confirmed_send_rate) }}%
+              </td>
+              <td style="text-align: right; font-family: var(--font-mono); color: var(--ids-text-secondary);">
+                {{ "%.2f"|format(item.contact_completion_percentage) }}%
+              </td>
+              <td style="text-align: right; font-family: var(--font-mono); color: var(--ids-text-muted);">
+                {{ "%.2f"|format(item.queue_terminal_percentage) }}%
+              </td>
+              <td style="text-align: center;">
+                <a href="/analytics/campaigns/{{ item.campaign_id }}" class="btn btn-secondary btn-xs">
+                  Inspect
+                </a>
+              </td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="9" style="text-align: center; padding: var(--space-6); color: var(--ids-text-muted);">
+                No campaigns found.
+              </td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

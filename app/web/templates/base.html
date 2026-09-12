@@ -98,10 +98,10 @@
           </a>
         </div>
 
-        <!-- INSIGHTS (Future Scope) -->
+        <!-- INSIGHTS -->
         <div class="sidebar-group">
           <div class="sidebar-group-title">Insights</div>
-          <span class="sidebar-link disabled" title="Phase 7.5 Coming Soon">
+          <a href="/analytics" class="sidebar-link {% if active_nav == 'analytics' or (request and request.url.path.startswith('/analytics')) %}active{% endif %}">
             <span class="sidebar-link-content">
               <span class="sidebar-link-icon">
                 <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -112,8 +112,7 @@
               </span>
               <span>Analytics</span>
             </span>
-            <span class="sidebar-badge">Soon</span>
-          </span>
+          </a>
         </div>
 
         <!-- SYSTEM (Future Scope) -->

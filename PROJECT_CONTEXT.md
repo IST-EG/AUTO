@@ -11,7 +11,8 @@
 - **Phase 7.2: Dashboard & System Supervision Control Center** — **IMPLEMENTED & APPROVED**
 - **Phase 7.3: Campaigns, Templates & Contacts Control Center** — **IMPLEMENTED & APPROVED**
 - **Phase 7.4: Queue & Message Operations Control Center** — **IMPLEMENTED & APPROVED**
-- **Production Deployment Checkpoint: Vercel + Supabase + Dedicated Worker VPS** — **IMPLEMENTED & VERIFIED — AWAITING HUMAN APPROVAL**
+- **Production Deployment Checkpoint: Vercel + Supabase + Dedicated Worker VPS** — **IMPLEMENTED & APPROVED**
+- **Phase 7.5: Analytics & Reporting Control Center** — **IMPLEMENTED & VERIFIED — AWAITING VERIFICATION APPROVAL**
 
 ---
 
@@ -456,8 +457,44 @@ The system is strictly provider-agnostic. All browser and WhatsApp Web automatio
    - Added `tests/web/test_vercel_config_and_security.py` (10 tests) verifying alias synchronization, cookie security, host header filtering, and strict execution boundary preservation (zero Selenium/browser imports or subprocess spawns).
 
 ### Verification Results
-- **Full Test Suite**: 368 passed, 1 deselected, 0 failed (100% pass rate).
+- **Full Test Suite**: 386 passed, 1 deselected, 0 failed (100% pass rate).
 - **Vercel Config & Security Suite**: 10 passed in `tests/web/test_vercel_config_and_security.py`.
 - **Remote Runner & CLI Auth Tests**: 5 tests in `tests/web/test_remote_runner_and_auth_cli.py` passing cleanly (including `--password-prompt`).
 - **Alembic Configuration**: Verified percent-safe interpolation handling in `app/database/migrations/env.py`.
 - **PostgreSQL DDL Generation**: Verified via `alembic upgrade head --sql`.
+
+---
+
+## 7. Phase 7.5: Analytics & Reporting Control Center — Implementation
+
+### Core Principles & Semantic Matrix Enforcement
+1. **Confirmed Send Rate (Locked Formula)**:
+   - Evaluated strictly as `confirmed_sends / (confirmed_sends + failed + unknown_outcome) * 100`.
+   - `confirmed_sends`: `messages.status == 'SENT'`.
+   - `failed`: `messages.status == 'FAILED'` where `error_type != 'UNKNOWN_OUTCOME'`.
+   - `unknown_outcome`: `messages.status == 'FAILED'` where `error_type == 'UNKNOWN_OUTCOME'`.
+   - `RETRY_PENDING`, `SKIPPED`, `CANCELLED`, `QUEUED` are strictly excluded from the rate denominator.
+   - Prohibited terms (`Delivered`, `Delivery Rate`, `Read`, `Success Rate`) are completely excluded from the feature surface.
+   - Mandatory disclaimer banner rendered on all analytics UI views and API responses:
+     *"CONFIRMED SEND RATE is calculated exclusively from UI-confirmed dispatches. WhatsApp Web does not provide delivery or read receipts."*
+2. **Cardinality-Safe Campaign Completion**:
+   - $1:N$ relationship between `CampaignContact` and `Message` is strictly respected.
+   - **Contact Outreach Completion %** is calculated exclusively at `campaign_contacts` level:
+     `COUNT(CampaignContact where status IN ('SENT', 'FAILED', 'SKIPPED', 'EXCLUDED')) / COUNT(CampaignContact.id) * 100`.
+   - **Queue Terminal %** is tracked separately from `messages`:
+     `COUNT(Message where status IN ('SENT', 'FAILED', 'SKIPPED', 'CANCELLED')) / COUNT(Message.id) * 100`.
+3. **Timezone Authority (`settings.APP_TIMEZONE`)**:
+   - `Africa/Cairo` is the sole calendar authority.
+   - Presets (`today`, `yesterday`, `last_7_days`, `last_30_days`, `custom`) are resolved to start/end of calendar days in `APP_TIMEZONE` and converted to UTC half-open intervals `[start_utc, end_utc)` before database queries.
+4. **Queue Analytics Decoupling**:
+   - `GET /api/v1/analytics/queue/live`: Point-in-time live snapshot of staged backlog, active worker leases, retry backlog, unknown outcomes, stale leases (>120s), circuit breaker, and emergency stop status with zero date filtering.
+   - `GET /api/v1/analytics/queue/historical`: Windowed metrics (dispatches completed, permanent failures, confirmed send rate, average lease duration, retry distribution, throughput timeline) evaluated over `[start_utc, end_utc)`.
+5. **Streaming CSV Export & Fail-Safe Audit**:
+   - `GET /api/v1/analytics/export/campaign/{id}` and `GET /api/v1/analytics/export/summary`.
+   - RBAC: `VIEWER` receives 403 Forbidden; `OPERATOR` receives masked phone numbers (`+201******678`); `ADMIN` and `OWNER` receive full E.164.
+   - Message body is strictly omitted.
+   - 5-stage lifecycle: generator clean completion emits `AuditLog(event_type="ANALYTICS_REPORT_EXPORTED", status="SUCCESS")`; client disconnect or aborted stream emits `AuditLog(event_type="ANALYTICS_REPORT_EXPORT_FAILED", status="INTERRUPTED")`.
+6. **Integra Design System (IDS) UI Views**:
+   - `/analytics`: Executive overview dashboard with date preset toolbar, 4 primary KPI cards, live queue strip, pure SVG throughput histogram, and campaign performance table.
+   - `/analytics/campaigns/{id}`: Detailed single campaign view with audience funnel, contact completion % progress bar, 8-state message distribution grid, and pacing safeguards.
+   - `base.html`: Activated `/analytics` sidebar link.

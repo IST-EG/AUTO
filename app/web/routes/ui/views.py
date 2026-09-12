@@ -21,6 +21,7 @@ from app.models.campaign import Campaign
 from app.web.services.contact_service import ContactService
 from app.web.services.queue_service import WebQueueService
 from app.web.services.campaign_contact_service import CampaignContactService
+from app.web.services.analytics_web_service import AnalyticsWebService
 
 templates_dir = Path(__file__).resolve().parent.parent.parent / "templates"
 templates = Jinja2Templates(directory=str(templates_dir))
@@ -493,3 +494,75 @@ def queue_detail_page(
     )
 
 
+@router.get("/analytics", response_class=HTMLResponse)
+def analytics_overview_page(
+    request: Request,
+    preset: str = "today",
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_optional),
+):
+    """Renders Executive Analytics & Reporting overview dashboard."""
+    if BootstrapService.is_setup_available(db):
+        return RedirectResponse(url="/setup", status_code=302)
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=302)
+
+    overview_data = AnalyticsWebService.get_overview(
+        db=db,
+        preset=preset,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+    return templates.TemplateResponse(
+        request=request,
+        name="analytics/overview.html",
+        context={
+            "current_user": current_user,
+            "overview": overview_data,
+            "preset": preset,
+            "start_date": start_date or "",
+            "end_date": end_date or "",
+        },
+    )
+
+
+@router.get("/analytics/campaigns/{campaign_id}", response_class=HTMLResponse)
+def analytics_campaign_detail_page(
+    campaign_id: int,
+    request: Request,
+    preset: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_optional),
+):
+    """Renders detailed campaign performance and outreach funnel view."""
+    if BootstrapService.is_setup_available(db):
+        return RedirectResponse(url="/setup", status_code=302)
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=302)
+
+    campaign_data = AnalyticsWebService.get_campaign_analytics(
+        db=db,
+        campaign_id=campaign_id,
+        preset=preset,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    if not campaign_data:
+        return RedirectResponse(url="/analytics", status_code=302)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="analytics/campaign_detail.html",
+        context={
+            "current_user": current_user,
+            "campaign": campaign_data,
+            "preset": preset or "",
+            "start_date": start_date or "",
+            "end_date": end_date or "",
+        },
+    )

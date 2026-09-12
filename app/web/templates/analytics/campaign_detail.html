@@ -1,0 +1,276 @@
+{% extends "base.html" %}
+
+{% block title %}{{ campaign.name }} &bull; Campaign Analytics &bull; Integra Outreach Control Center{% endblock %}
+
+{% block breadcrumbs %}
+<span class="topbar-breadcrumb-item">Insights</span>
+<span class="topbar-breadcrumb-sep">/</span>
+<a href="/analytics" class="topbar-breadcrumb-item">Analytics</a>
+<span class="topbar-breadcrumb-sep">/</span>
+<span class="topbar-breadcrumb-item active">{{ campaign.name }}</span>
+{% endblock %}
+
+{% block content %}
+<div style="padding-bottom: 2.5rem;">
+
+  <!-- Page Header -->
+  <div class="page-header">
+    <div>
+      <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px;">
+        <h1 class="page-header-title">{{ campaign.name }}</h1>
+        <span class="status-pill status-{{ campaign.status.lower() }}">
+          {{ campaign.status }}
+        </span>
+      </div>
+      <p class="page-header-subtitle">Campaign outreach performance and queue execution analytics</p>
+    </div>
+    <div class="page-header-actions">
+      {% if current_user.role in ['OWNER', 'ADMIN', 'OPERATOR'] %}
+      <a href="/api/v1/analytics/export/campaign/{{ campaign.campaign_id }}" class="btn btn-secondary btn-sm" download>
+        <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2" style="margin-right: 6px;">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="7 10 12 15 17 10"></polyline>
+          <line x1="12" y1="15" x2="12" y2="3"></line>
+        </svg>
+        Export Campaign CSV
+      </a>
+      {% endif %}
+      <a href="/campaigns/{{ campaign.campaign_id }}" class="btn btn-secondary btn-sm">
+        Campaign Details
+      </a>
+    </div>
+  </div>
+
+  <!-- Mandatory Semantic Disclaimer Banner -->
+  <div class="card" style="margin-bottom: var(--space-5); border-left: 4px solid var(--ids-primary); background: var(--ids-surface-elevated); padding: 12px 18px;">
+    <div style="display: flex; align-items: center; gap: 12px; font-size: var(--text-xs); color: var(--ids-text-secondary); line-height: 1.5;">
+      <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" style="color: var(--ids-primary); flex-shrink: 0;">
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="12" y1="16" x2="12" y2="12"></line>
+        <line x1="12" y1="8" x2="12.01" y2="8"></line>
+      </svg>
+      <div>
+        <strong style="color: var(--ids-text-primary);">CONFIRMED SEND RATE</strong> is calculated exclusively from UI-confirmed dispatches. WhatsApp Web does not provide delivery or read receipts.
+      </div>
+    </div>
+  </div>
+
+  <!-- KPI CARDS ROW -->
+  <div class="kpi-grid" style="margin-bottom: var(--space-6);">
+    <!-- KPI 1: Confirmed Send Rate -->
+    <div class="kpi-card">
+      <div class="kpi-label">CONFIRMED SEND RATE</div>
+      <div class="kpi-value" style="color: var(--ids-primary);">
+        {{ "%.2f"|format(campaign.performance.confirmed_send_rate) }}%
+      </div>
+      <div class="kpi-subtext">confirmed / (confirmed + failed + unknown)</div>
+    </div>
+
+    <!-- KPI 2: Contact Completion -->
+    <div class="kpi-card">
+      <div class="kpi-label">Contact Completion</div>
+      <div class="kpi-value" style="color: var(--ids-success);">
+        {{ "%.2f"|format(campaign.performance.contact_completion_percentage) }}%
+      </div>
+      <div class="kpi-subtext">Evaluated from campaign_contacts</div>
+    </div>
+
+    <!-- KPI 3: Queue Terminal Rate -->
+    <div class="kpi-card">
+      <div class="kpi-label">Queue Terminal Rate</div>
+      <div class="kpi-value" style="color: var(--ids-info);">
+        {{ "%.2f"|format(campaign.performance.queue_terminal_percentage) }}%
+      </div>
+      <div class="kpi-subtext">Evaluated from messages table</div>
+    </div>
+
+    <!-- KPI 4: Failure Rate -->
+    <div class="kpi-card">
+      <div class="kpi-label">Failure Rate</div>
+      <div class="kpi-value" style="color: {% if campaign.performance.failure_rate > 0 %}var(--ids-danger){% else %}var(--ids-text-muted){% endif %};">
+        {{ "%.2f"|format(campaign.performance.failure_rate) }}%
+      </div>
+      <div class="kpi-subtext">(failed + unknown) / terminal dispatches</div>
+    </div>
+  </div>
+
+  <!-- AUDIENCE FUNNEL & COMPLETION PROGRESS -->
+  <div class="card" style="margin-bottom: var(--space-6);">
+    <div class="card-header">
+      <h2 style="font-size: var(--text-base); font-weight: 700; color: var(--ids-text-primary); margin: 0;">
+        Audience Funnel &amp; Cardinality-Safe Progress
+      </h2>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--space-4); margin-bottom: var(--space-5);">
+      <div style="background: var(--ids-surface-elevated); padding: var(--space-3) var(--space-4); border-radius: var(--radius-sm); border: 1px solid var(--ids-border);">
+        <div style="font-size: 11px; color: var(--ids-text-muted); text-transform: uppercase;">Total Audience Contacts</div>
+        <div style="font-size: var(--text-2xl); font-weight: 700; color: var(--ids-text-primary); font-family: var(--font-mono); margin-top: 4px;">
+          {{ campaign.total_contacts }}
+        </div>
+      </div>
+
+      <div style="background: var(--ids-surface-elevated); padding: var(--space-3) var(--space-4); border-radius: var(--radius-sm); border: 1px solid var(--ids-border);">
+        <div style="font-size: 11px; color: var(--ids-text-muted); text-transform: uppercase;">Approved Eligible</div>
+        <div style="font-size: var(--text-2xl); font-weight: 700; color: var(--ids-success); font-family: var(--font-mono); margin-top: 4px;">
+          {{ campaign.contacts_breakdown.get('eligible', 0) }}
+        </div>
+      </div>
+
+      <div style="background: var(--ids-surface-elevated); padding: var(--space-3) var(--space-4); border-radius: var(--radius-sm); border: 1px solid var(--ids-border);">
+        <div style="font-size: 11px; color: var(--ids-text-muted); text-transform: uppercase;">Excluded Contacts</div>
+        <div style="font-size: var(--text-2xl); font-weight: 700; color: var(--ids-text-muted); font-family: var(--font-mono); margin-top: 4px;">
+          {{ campaign.contacts_breakdown.get('excluded', 0) }}
+        </div>
+      </div>
+
+      <div style="background: var(--ids-surface-elevated); padding: var(--space-3) var(--space-4); border-radius: var(--radius-sm); border: 1px solid var(--ids-border);">
+        <div style="font-size: 11px; color: var(--ids-text-muted); text-transform: uppercase;">Pending Approval</div>
+        <div style="font-size: var(--text-2xl); font-weight: 700; color: var(--ids-warning); font-family: var(--font-mono); margin-top: 4px;">
+          {{ campaign.contacts_breakdown.get('pending', 0) }}
+        </div>
+      </div>
+    </div>
+
+    <!-- Progress Bars -->
+    <div style="display: flex; flex-direction: column; gap: var(--space-4);">
+      <div>
+        <div style="display: flex; justify-content: space-between; font-size: var(--text-xs); margin-bottom: 6px;">
+          <span style="color: var(--ids-text-secondary); font-weight: 600;">Contact Outreach Completion (campaign_contacts level)</span>
+          <span style="color: var(--ids-text-primary); font-family: var(--font-mono); font-weight: 700;">{{ "%.2f"|format(campaign.performance.contact_completion_percentage) }}%</span>
+        </div>
+        <div style="background: var(--ids-surface-elevated); height: 8px; border-radius: var(--radius-full); overflow: hidden; border: 1px solid var(--ids-border);">
+          <div style="background: var(--ids-success); height: 100%; width: {{ [campaign.performance.contact_completion_percentage, 100]|min }}%;"></div>
+        </div>
+      </div>
+
+      <div>
+        <div style="display: flex; justify-content: space-between; font-size: var(--text-xs); margin-bottom: 6px;">
+          <span style="color: var(--ids-text-secondary); font-weight: 600;">Queue Progression (messages table level)</span>
+          <span style="color: var(--ids-text-primary); font-family: var(--font-mono); font-weight: 700;">{{ "%.2f"|format(campaign.performance.queue_terminal_percentage) }}%</span>
+        </div>
+        <div style="background: var(--ids-surface-elevated); height: 8px; border-radius: var(--radius-full); overflow: hidden; border: 1px solid var(--ids-border);">
+          <div style="background: var(--ids-primary); height: 100%; width: {{ [campaign.performance.queue_terminal_percentage, 100]|min }}%;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MESSAGE DISPATCH OUTCOMES GRID (8 States) -->
+  <div class="card" style="margin-bottom: var(--space-6);">
+    <div class="card-header">
+      <h2 style="font-size: var(--text-base); font-weight: 700; color: var(--ids-text-primary); margin: 0;">
+        Message Queue State Distribution
+      </h2>
+      <span style="font-size: 11px; color: var(--ids-text-muted); font-family: var(--font-mono);">
+        Total Message Records: {{ campaign.total_messages }}
+      </span>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: var(--space-3);">
+      <div style="background: var(--ids-surface-elevated); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--ids-border);">
+        <div style="font-size: 11px; color: var(--ids-text-muted); text-transform: uppercase;">Confirmed Sends</div>
+        <div style="font-size: var(--text-xl); font-weight: 700; color: var(--ids-success); font-family: var(--font-mono); margin-top: 4px;">
+          {{ campaign.queue_breakdown.get('confirmed_sends', 0) }}
+        </div>
+      </div>
+
+      <div style="background: var(--ids-surface-elevated); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--ids-border);">
+        <div style="font-size: 11px; color: var(--ids-text-muted); text-transform: uppercase;">Failures</div>
+        <div style="font-size: var(--text-xl); font-weight: 700; color: var(--ids-danger); font-family: var(--font-mono); margin-top: 4px;">
+          {{ campaign.queue_breakdown.get('failed', 0) }}
+        </div>
+      </div>
+
+      <div style="background: var(--ids-surface-elevated); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--ids-border);">
+        <div style="font-size: 11px; color: var(--ids-text-muted); text-transform: uppercase;">Unknown Outcome</div>
+        <div style="font-size: var(--text-xl); font-weight: 700; color: var(--ids-warning); font-family: var(--font-mono); margin-top: 4px;">
+          {{ campaign.queue_breakdown.get('unknown_outcome', 0) }}
+        </div>
+      </div>
+
+      <div style="background: var(--ids-surface-elevated); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--ids-border);">
+        <div style="font-size: 11px; color: var(--ids-text-muted); text-transform: uppercase;">Queued</div>
+        <div style="font-size: var(--text-xl); font-weight: 700; color: var(--ids-text-primary); font-family: var(--font-mono); margin-top: 4px;">
+          {{ campaign.queue_breakdown.get('queued', 0) }}
+        </div>
+      </div>
+
+      <div style="background: var(--ids-surface-elevated); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--ids-border);">
+        <div style="font-size: 11px; color: var(--ids-text-muted); text-transform: uppercase;">Processing</div>
+        <div style="font-size: var(--text-xl); font-weight: 700; color: var(--ids-info); font-family: var(--font-mono); margin-top: 4px;">
+          {{ campaign.queue_breakdown.get('processing', 0) }}
+        </div>
+      </div>
+
+      <div style="background: var(--ids-surface-elevated); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--ids-border);">
+        <div style="font-size: 11px; color: var(--ids-text-muted); text-transform: uppercase;">Retry Pending</div>
+        <div style="font-size: var(--text-xl); font-weight: 700; color: #C084FC; font-family: var(--font-mono); margin-top: 4px;">
+          {{ campaign.queue_breakdown.get('retry_pending', 0) }}
+        </div>
+      </div>
+
+      <div style="background: var(--ids-surface-elevated); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--ids-border);">
+        <div style="font-size: 11px; color: var(--ids-text-muted); text-transform: uppercase;">Skipped</div>
+        <div style="font-size: var(--text-xl); font-weight: 700; color: var(--ids-text-muted); font-family: var(--font-mono); margin-top: 4px;">
+          {{ campaign.queue_breakdown.get('skipped', 0) }}
+        </div>
+      </div>
+
+      <div style="background: var(--ids-surface-elevated); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--ids-border);">
+        <div style="font-size: 11px; color: var(--ids-text-muted); text-transform: uppercase;">Cancelled</div>
+        <div style="font-size: var(--text-xl); font-weight: 700; color: var(--ids-text-muted); font-family: var(--font-mono); margin-top: 4px;">
+          {{ campaign.queue_breakdown.get('cancelled', 0) }}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PACING & SAFEGUARDS CARD -->
+  <div class="card">
+    <div class="card-header">
+      <h2 style="font-size: var(--text-base); font-weight: 700; color: var(--ids-text-primary); margin: 0;">
+        Pacing &amp; Anti-Spam Safeguards
+      </h2>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--space-4);">
+      <div>
+        <div style="font-size: 11px; color: var(--ids-text-muted); text-transform: uppercase;">Min Delay</div>
+        <div style="font-size: var(--text-base); font-weight: 600; color: var(--ids-text-primary); font-family: var(--font-mono); margin-top: 2px;">
+          {{ campaign.pacing.get('min_delay_seconds', 0) }}s
+        </div>
+      </div>
+
+      <div>
+        <div style="font-size: 11px; color: var(--ids-text-muted); text-transform: uppercase;">Max Delay</div>
+        <div style="font-size: var(--text-base); font-weight: 600; color: var(--ids-text-primary); font-family: var(--font-mono); margin-top: 2px;">
+          {{ campaign.pacing.get('max_delay_seconds', 0) }}s
+        </div>
+      </div>
+
+      <div>
+        <div style="font-size: 11px; color: var(--ids-text-muted); text-transform: uppercase;">Daily Limit</div>
+        <div style="font-size: var(--text-base); font-weight: 600; color: var(--ids-text-primary); font-family: var(--font-mono); margin-top: 2px;">
+          {{ campaign.pacing.get('daily_limit', 0) }} msgs/day
+        </div>
+      </div>
+
+      <div>
+        <div style="font-size: 11px; color: var(--ids-text-muted); text-transform: uppercase;">Error Threshold</div>
+        <div style="font-size: var(--text-base); font-weight: 600; color: var(--ids-text-primary); font-family: var(--font-mono); margin-top: 2px;">
+          {{ campaign.pacing.get('error_threshold', 0) }} consecutive
+        </div>
+      </div>
+
+      <div>
+        <div style="font-size: 11px; color: var(--ids-text-muted); text-transform: uppercase;">Consecutive Errors</div>
+        <div style="font-size: var(--text-base); font-weight: 600; color: {% if campaign.pacing.get('consecutive_errors', 0) > 0 %}var(--ids-warning){% else %}var(--ids-text-muted){% endif %}; font-family: var(--font-mono); margin-top: 2px;">
+          {{ campaign.pacing.get('consecutive_errors', 0) }}
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

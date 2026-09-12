@@ -2,6 +2,37 @@
 
 All notable changes to this project are documented in this file.
 
+## [Phase 7.5] - 2026-09-12 — IMPLEMENTED & VERIFIED (AWAITING VERIFICATION APPROVAL)
+### Added
+- **Analytics & Reporting Control Center (`/analytics`, `/analytics/campaigns/{id}`)**:
+  - Executive analytics dashboard featuring time-window filtering (`today`, `yesterday`, `last_7_days`, `last_30_days`, `custom`), 4 primary KPI cards, live queue health strip, responsive SVG throughput histogram, and campaign performance table.
+  - Granular campaign analytics deep-dive view featuring audience funnel, cardinality-safe contact completion % progress, 8-state message outcome grid, and pacing safeguards.
+  - Activated `/analytics` sidebar navigation item in `app/web/templates/base.html`.
+- **Authoritative Confirmed Send Rate & Invariant Enforcement**:
+  - Locked formula: `confirmed_sends / (confirmed_sends + failed + unknown_outcome) * 100`.
+  - Strict exclusion of `RETRY_PENDING`, `SKIPPED`, `CANCELLED`, `QUEUED` from the rate denominator.
+  - Zero occurrences of prohibited terms (`Delivered`, `Delivery Rate`, `Read`, `Success Rate`, `Archived`, `Sending`) on the feature surface.
+  - Prominent mandatory semantic disclaimer banner rendered on all UI views and API payloads.
+- **Cardinality-Safe Campaign Completion**:
+  - Maintained $1:N$ integrity between `CampaignContact` and `Message`.
+  - Contact Outreach Completion % calculated exclusively at `campaign_contacts` level: `COUNT(status IN ('SENT','FAILED','SKIPPED','EXCLUDED')) / COUNT(id) * 100`.
+  - Queue Terminal % tracked separately from `messages`: `COUNT(status IN ('SENT','FAILED','SKIPPED','CANCELLED')) / COUNT(id) * 100`.
+- **Timezone Authority (`app/utils/timezone.py`)**:
+  - Anchored all calendar semantics to `APP_TIMEZONE` (`Africa/Cairo`).
+  - Converts start/end of day boundaries to UTC half-open intervals `[start_utc, end_utc)` before database queries.
+- **Decoupled Queue Analytics (`/api/v1/analytics/queue/live` vs `/historical`)**:
+  - `GET /api/v1/analytics/queue/live`: Live point-in-time snapshot with zero date filtering.
+  - `GET /api/v1/analytics/queue/historical`: Time-windowed metrics (dispatches, failures, lease duration, retry distribution, timeline).
+- **Fail-Safe Streaming CSV Export (`/export/campaign/{id}`, `/export/summary`)**:
+  - RBAC: `VIEWER` gets 403 Forbidden; `OPERATOR` gets masked phone numbers (`+201******678`); `ADMIN` and `OWNER` get full E.164.
+  - Message body content strictly omitted.
+  - 5-stage lifecycle: emits `AuditLog(event_type="ANALYTICS_REPORT_EXPORTED", status="SUCCESS")` on clean cursor exhaustion; emits `AuditLog(event_type="ANALYTICS_REPORT_EXPORT_FAILED", status="INTERRUPTED")` if disconnected early.
+- **Testing & Verification**:
+  - Comprehensive 18-test suite in `tests/web/test_analytics_service_and_api.py`.
+  - Full regression run: 386 tests passing (100% pass rate).
+
+---
+
 ## [Production Deployment Checkpoint] - 2026-09-12 — IMPLEMENTED & VERIFIED (AWAITING HUMAN APPROVAL)
 ### Added
 - **PostgreSQL Database Support & Engine Abstraction**:
