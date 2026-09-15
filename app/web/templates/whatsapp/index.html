@@ -1,0 +1,621 @@
+{% extends "base.html" %}
+
+{% block title %}WhatsApp Operations &bull; Integra Outreach Control Center{% endblock %}
+
+{% block breadcrumbs %}
+<span class="topbar-breadcrumb-item">System</span>
+<span class="topbar-breadcrumb-sep">/</span>
+<span class="topbar-breadcrumb-item active">WhatsApp Operations</span>
+{% endblock %}
+
+{% block content %}
+<div class="whatsapp-operations-console" style="padding-bottom: 2rem;">
+
+  <!-- PAGE HEADER -->
+  <div class="page-header">
+    <div>
+      <h1 class="page-header-title">WhatsApp Operations &amp; Session Control</h1>
+      <p class="page-header-subtitle">Provider lifecycle supervision, sanitized diagnostics, and controlled recovery</p>
+    </div>
+    <div class="page-header-actions">
+      <div id="telemetry-indicator" class="telemetry-indicator">
+        <span id="telemetry-dot" class="pulse-dot pulse"></span>
+        <span id="telemetry-text">Monitoring</span>
+      </div>
+      <button id="btn-refresh" class="btn btn-secondary btn-sm" onclick="window.location.reload();" title="Refresh state">
+        <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2" style="margin-right: 4px;">
+          <polyline points="23 4 23 10 17 10"></polyline>
+          <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+        </svg>
+        Refresh
+      </button>
+    </div>
+  </div>
+
+  <!-- MANDATORY SEMANTIC DISCLAIMER BANNER -->
+  <div class="alert alert-info" style="margin-bottom: 1.5rem; background: rgba(59, 130, 246, 0.08); border-left: 4px solid var(--ids-accent, #3b82f6);">
+    <div style="display: flex; align-items: center; gap: 0.75rem;">
+      <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2">
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="12" y1="16" x2="12" y2="12"></line>
+        <line x1="12" y1="8" x2="12.01" y2="8"></line>
+      </svg>
+      <div>
+        <strong style="text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.05em;">Semantic Boundary Guarantee:</strong>
+        <span style="font-size: 0.8125rem; margin-left: 0.5rem;">
+          {{ status.disclaimer }}
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- IN-FLIGHT COMMAND BANNER (DYNAMIC) -->
+  <div id="command-feedback-banner" style="display: none; margin-bottom: 1.5rem;"></div>
+
+  <!-- TOP STATUS BANNER -->
+  <div class="card" style="margin-bottom: 1.5rem; border-left: 4px solid {% if status.state == 'CONNECTED' %}var(--ids-success, #10b981){% elif status.state == 'AUTHENTICATING' %}var(--ids-warning, #f59e0b){% elif status.state in ('ERROR', 'SESSION_LOST') %}var(--ids-danger, #ef4444){% else %}var(--ids-border, #334155){% endif %};">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+      <div style="display: flex; align-items: center; gap: 1rem;">
+        <div style="font-size: 2rem;">
+          {% if status.state == 'CONNECTED' %}🟢{% elif status.state == 'AUTHENTICATING' %}🟡{% elif status.state in ('ERROR', 'SESSION_LOST') %}🔴{% else %}⚪{% endif %}
+        </div>
+        <div>
+          <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <span style="font-size: 1.25rem; font-weight: 700; color: #f8fafc;">Status: {{ status.state }}</span>
+            <span class="status-pill status-{{ status.health_state.lower() }}">{{ status.health_state }}</span>
+          </div>
+          <p style="margin: 0.25rem 0 0; font-size: 0.875rem; color: #94a3b8;">
+            {% if status.state == 'CONNECTED' %}
+              WhatsApp Web chat interface is responsive and authenticated. Ready for campaign dispatches.
+            {% elif status.state == 'AUTHENTICATING' %}
+              Awaiting operator QR code scan. Connect with the registered WhatsApp mobile account.
+            {% elif status.state == 'SESSION_LOST' %}
+              Session disconnected remotely from mobile device. Re-authentication is required.
+            {% elif status.state == 'ERROR' %}
+              Browser automation driver encountered an unrecoverable failure. Recovery recommended.
+            {% elif status.state == 'STOPPED' %}
+              Session has been gracefully stopped by operator command.
+            {% else %}
+              Browser session is disconnected. Standby profile credentials preserved on disk.
+            {% endif %}
+          </p>
+        </div>
+      </div>
+      <div style="text-align: right; font-size: 0.8125rem; color: #94a3b8;">
+        <div>Runner: <strong style="color: #f1f5f9;">{% if status.is_runner_active %}ACTIVE (PID {{ status.runner_pid }}){% else %}STANDBY (Worker Inactive){% endif %}</strong></div>
+        <div>Storage: <strong style="color: #f1f5f9;">{{ status.profile_storage_state }}</strong></div>
+        {% if status.last_health_check_age_seconds is not none %}
+        <div>Last Probe: <strong style="color: #f1f5f9;">{{ status.last_health_check_age_seconds|round(1) }}s ago</strong></div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- 4-CARD KPI GRID -->
+  <div class="kpi-grid" style="margin-bottom: 1.5rem;">
+    <!-- CARD 1: Session State -->
+    <div class="kpi-card">
+      <div class="kpi-label">SESSION STATE</div>
+      <div class="kpi-value" style="font-size: 1.5rem;">
+        <span class="status-pill status-{{ 'running' if status.state == 'CONNECTED' else ('paused' if status.state == 'AUTHENTICATING' else 'failed') }}">
+          {{ status.state }}
+        </span>
+      </div>
+      <div class="kpi-subtext">
+        {% if status.last_state_transition_at %}
+          Transition: {{ status.last_state_transition_at[:19].replace('T', ' ') }}
+        {% else %}
+          Provider lifecycle baseline
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- CARD 2: Provider Health -->
+    <div class="kpi-card">
+      <div class="kpi-label">PROVIDER HEALTH</div>
+      <div class="kpi-value" style="font-size: 1.5rem;">
+        <span class="status-pill status-{{ status.health_state.lower() }}">
+          {{ status.health_state }}
+        </span>
+      </div>
+      <div class="kpi-subtext">
+        {% if status.last_health_check_at %}
+          Probed: {{ status.last_health_check_at[:19].replace('T', ' ') }}
+        {% else %}
+          Periodic health evaluation
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- CARD 3: Runner Coupling -->
+    <div class="kpi-card">
+      <div class="kpi-label">RUNNER COUPLING</div>
+      <div class="kpi-value" style="font-size: 1.25rem;">
+        {% if status.is_runner_active %}
+          <span style="color: #10b981; font-weight: 700;">ATTACHED (PID {{ status.runner_pid }})</span>
+        {% else %}
+          <span style="color: #94a3b8; font-weight: 600;">STANDBY PROFILE</span>
+        {% endif %}
+      </div>
+      <div class="kpi-subtext">
+        {% if status.runner_campaign_id %}
+          Processing Campaign #{{ status.runner_campaign_id }}
+        {% else %}
+          Worker daemon idle or stopped
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- CARD 4: Profile Storage -->
+    <div class="kpi-card">
+      <div class="kpi-label">PERSISTENT STORAGE</div>
+      <div class="kpi-value" style="font-size: 1.25rem;">
+        {% if status.profile_storage_state == 'PRESENT' %}
+          <span style="color: #10b981; font-weight: 700;">PRESENT</span>
+          {% if status.profile_size_bytes %}
+            <span style="font-size: 0.8125rem; color: #94a3b8; font-weight: 400;">({{ (status.profile_size_bytes / 1048576)|round(1) }} MB)</span>
+          {% endif %}
+        {% elif status.profile_storage_state == 'EMPTY' %}
+          <span style="color: #f59e0b; font-weight: 700;">EMPTY</span>
+        {% else %}
+          <span style="color: #ef4444; font-weight: 700;">MISSING</span>
+        {% endif %}
+      </div>
+      <div class="kpi-subtext">
+        Storage status: {{ 'Writable' if status.profile_writable else 'Read-Only' }}
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN SPLIT: ACTIONS & GUIDANCE (LEFT) vs SANITIZED DIAGNOSTICS (RIGHT) -->
+  <div style="display: grid; grid-template-columns: 2fr 1.2fr; gap: 1.5rem; margin-bottom: 1.5rem;">
+
+    <!-- LEFT: OPERATIONAL ACTIONS & RUNBOOK -->
+    <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+
+      <!-- OPERATIONAL ACTIONS CARD -->
+      <div class="card">
+        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+          <h2 class="card-title">Operational Controls</h2>
+          <span style="font-size: 0.75rem; color: #94a3b8;">Role Gated: OPERATOR+</span>
+        </div>
+        <div class="card-body">
+          <p style="font-size: 0.875rem; color: #94a3b8; margin-bottom: 1rem;">
+            State-changing operational commands are queued atomically via the deterministic command protocol.
+          </p>
+
+          <div style="display: flex; flex-wrap: wrap; gap: 0.75rem;">
+            <!-- Health Check -->
+            <button class="btn btn-primary" onclick="triggerHealthCheck();" {% if current_user.role == 'VIEWER' %}disabled title="Requires OPERATOR role"{% endif %}>
+              <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2" style="margin-right: 4px;">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+              </svg>
+              Run Health Check
+            </button>
+
+            <!-- Reconnect / Recovery -->
+            <button class="btn btn-secondary" onclick="openReconnectModal();" {% if current_user.role == 'VIEWER' %}disabled title="Requires OPERATOR role"{% endif %}>
+              <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2" style="margin-right: 4px;">
+                <polyline points="1 4 1 10 7 10"></polyline>
+                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+              </svg>
+              Reconnect / Recovery
+            </button>
+
+            <!-- Controlled Disconnect -->
+            <button class="btn btn-secondary" onclick="openDisconnectModal();" {% if current_user.role == 'VIEWER' %}disabled title="Requires OPERATOR role"{% endif %}>
+              <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2" style="margin-right: 4px;">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="9" y1="9" x2="15" y2="15"></line>
+                <line x1="15" y1="9" x2="9" y2="15"></line>
+              </svg>
+              Controlled Disconnect
+            </button>
+
+            <!-- Logout / Reset (ADMIN/OWNER ONLY) -->
+            {% if current_user.role in ('ADMIN', 'OWNER') %}
+            <button class="btn btn-danger" onclick="openLogoutModal();">
+              <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2" style="margin-right: 4px;">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                <polyline points="16 17 21 12 16 7"></polyline>
+                <line x1="21" y1="12" x2="9" y2="12"></line>
+              </svg>
+              Logout &amp; Reset
+            </button>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <!-- IN-FLIGHT COMMAND MONITOR -->
+      <div class="card">
+        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+          <h2 class="card-title">In-Flight Command Monitor</h2>
+          <span style="font-size: 0.75rem; color: #94a3b8;">Single-Inflight Protocol</span>
+        </div>
+        <div class="card-body">
+          {% if status.active_command %}
+          <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 6px; padding: 1rem; margin-bottom: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+              <strong>Action: {{ status.active_command.action }}</strong>
+              <span class="status-pill status-paused">{{ status.active_command.status }}</span>
+            </div>
+            <div style="font-size: 0.8125rem; color: #94a3b8;">
+              <div>Request ID: <code>{{ status.active_command.request_id }}</code></div>
+              <div>Initiated by: <strong>{{ status.active_command.requested_by }}</strong> at {{ status.active_command.requested_at[:19].replace('T', ' ') }}</div>
+              {% if status.active_command.claimed_by %}
+              <div>Claimed by Worker: <strong>{{ status.active_command.claimed_by }}</strong></div>
+              {% endif %}
+            </div>
+          </div>
+          {% if current_user.role in ('ADMIN', 'OWNER') %}
+          <button class="btn btn-secondary btn-sm" onclick="clearStaleCommand();" style="color: #ef4444;">
+            Clear Stale Command (Admin Override)
+          </button>
+          {% endif %}
+          {% else %}
+          <div style="color: #94a3b8; font-size: 0.875rem;">
+            No operational commands currently in flight. Ready to accept operations.
+          </div>
+          {% if status.last_completed_command %}
+          <div style="margin-top: 0.75rem; font-size: 0.8125rem; color: #64748b;">
+            Last concluded: <strong>{{ status.last_completed_command.action }}</strong> &bull;
+            Status: <span style="color: {% if status.last_completed_command.status == 'COMPLETED' %}#10b981{% else %}#ef4444{% endif %};">{{ status.last_completed_command.status }}</span>
+            {% if status.last_completed_command.completed_at %}
+            at {{ status.last_completed_command.completed_at[:19].replace('T', ' ') }}
+            {% endif %}
+          </div>
+          {% endif %}
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- OPERATOR INSTRUCTIONS & RUNBOOK GUIDANCE -->
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Operator Guidance &amp; Worker Runbook</h2>
+        </div>
+        <div class="card-body" style="font-size: 0.875rem; line-height: 1.6; color: #cbd5e1;">
+          {% if status.state == 'AUTHENTICATING' %}
+          <div style="background: rgba(245, 158, 11, 0.1); border-left: 3px solid #f59e0b; padding: 0.75rem 1rem; margin-bottom: 1rem;">
+            <strong>QR Code Scan Required:</strong> WhatsApp Web is awaiting authentication.
+            Log into the Worker VPS host and execute:
+            <pre style="background: #0f172a; padding: 0.5rem; border-radius: 4px; margin-top: 0.5rem; font-family: monospace;">python -m app.cli.main session login --timeout 120</pre>
+            Once scanned, this console will automatically transition to <strong>CONNECTED</strong>.
+          </div>
+          {% elif status.state == 'SESSION_LOST' %}
+          <div style="background: rgba(239, 68, 68, 0.1); border-left: 3px solid #ef4444; padding: 0.75rem 1rem; margin-bottom: 1rem;">
+            <strong>Session Revoked Remotely:</strong> The linked phone account disconnected this session.
+            Run the interactive login command on the Worker host to re-authenticate with your device.
+          </div>
+          {% else %}
+          <p>
+            The Vercel Control Plane operates decoupled from browser execution. Operational commands are claimed
+            and executed by the dedicated <code>ProductionRunner</code> daemon on the Worker VPS.
+          </p>
+          <div style="background: #0f172a; border-radius: 6px; padding: 0.75rem 1rem; margin-top: 0.5rem;">
+            <div style="color: #64748b; font-size: 0.75rem; text-transform: uppercase; margin-bottom: 0.25rem;">Terminal Diagnostics (Worker VPS)</div>
+            <code style="color: #38bdf8;">$ python -m app.cli.main session status</code><br>
+            <code style="color: #38bdf8;">$ python -m app.cli.main preflight --strict</code>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT: SANITIZED PROVIDER DIAGNOSTICS -->
+    <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Sanitized Diagnostics</h2>
+          <span style="font-size: 0.75rem; color: #94a3b8;">Zero Host Paths</span>
+        </div>
+        <div class="card-body">
+          <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+            {% for check in diagnostics.checks %}
+            <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid #1e293b; border-radius: 6px; padding: 0.75rem;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                <strong style="font-size: 0.875rem; color: #f8fafc;">{{ check.name }}</strong>
+                {% if check.passed %}
+                <span style="color: #10b981; font-weight: 700; font-size: 0.75rem;">PASSED</span>
+                {% else %}
+                <span style="color: #ef4444; font-weight: 700; font-size: 0.75rem;">WARNING</span>
+                {% endif %}
+              </div>
+              <p style="margin: 0; font-size: 0.8125rem; color: #94a3b8;">{{ check.message }}</p>
+              {% if check.details %}
+              <div style="margin-top: 0.5rem; font-size: 0.75rem; color: #64748b; display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                {% for k, v in check.details.items() %}
+                <span style="background: #1e293b; padding: 2px 6px; border-radius: 3px;">{{ k }}: <strong style="color: #cbd5e1;">{{ v }}</strong></span>
+                {% endfor %}
+              </div>
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+
+          <!-- DIAGNOSTIC SNIPPET IF AVAILABLE -->
+          {% if status.diagnostic_snippet %}
+          <div style="margin-top: 1rem; padding: 0.75rem; background: rgba(30, 41, 59, 0.5); border-radius: 4px; font-size: 0.75rem; color: #94a3b8;">
+            <div style="color: #64748b; font-size: 0.7rem; text-transform: uppercase;">Diagnostic Snippet</div>
+            <code>{{ status.diagnostic_snippet }}</code>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- BOTTOM SECTION: RECENT WHATSAPP OPERATIONS AUDIT -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Recent WhatsApp Operational Audit Log</h2>
+      <span style="font-size: 0.75rem; color: #94a3b8;">Immutable Postgres Audit Trail</span>
+    </div>
+    <div class="card-body" style="padding: 0;">
+      <div class="table-responsive">
+        <table class="table" style="margin: 0;">
+          <thead>
+            <tr>
+              <th style="width: 180px;">Timestamp (UTC)</th>
+              <th style="width: 220px;">Event Type</th>
+              <th style="width: 120px;">Status</th>
+              <th>Outcome / Details</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if recent_logs %}
+            {% for log in recent_logs %}
+            <tr>
+              <td style="font-family: monospace; font-size: 0.8125rem; color: #94a3b8;">
+                {{ log.created_at[:19].replace('T', ' ') if log.created_at else '—' }}
+              </td>
+              <td>
+                <span style="font-family: monospace; font-size: 0.8125rem; font-weight: 600; color: #f1f5f9;">
+                  {{ log.event_type }}
+                </span>
+              </td>
+              <td>
+                <span class="status-pill status-{{ 'running' if log.status in ('SUCCESS', 'CONNECTED') else ('paused' if log.status in ('REQUESTED', 'CLAIMED') else 'failed') }}">
+                  {{ log.status }}
+                </span>
+              </td>
+              <td style="font-size: 0.8125rem; color: #cbd5e1;">
+                {{ log.result or log.error_message or '—' }}
+              </td>
+            </tr>
+            {% endfor %}
+            {% else %}
+            <tr>
+              <td colspan="4" style="text-align: center; color: #64748b; padding: 2rem;">
+                No recent WhatsApp operations recorded in audit log.
+              </td>
+            </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- RECONNECT MODAL -->
+<div id="modal-reconnect" class="modal-backdrop" style="display: none;">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3 class="modal-title">Confirm Session Reconnect</h3>
+      <button class="modal-close" onclick="closeModal('modal-reconnect');">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size: 0.875rem; color: #94a3b8; margin-bottom: 1rem;">
+        This will issue an operational restart command to the worker daemon, reloading the browser with cached credentials.
+      </p>
+      <label style="display: block; font-size: 0.8125rem; margin-bottom: 0.5rem; color: #cbd5e1;">Operational Rationale (Required):</label>
+      <input type="text" id="reconnect-reason" class="form-input" placeholder="e.g. Recovering after temporary network interruption" style="width: 100%; margin-bottom: 1rem;">
+    </div>
+    <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+      <button class="btn btn-secondary" onclick="closeModal('modal-reconnect');">Cancel</button>
+      <button class="btn btn-primary" onclick="submitReconnect();">Submit Reconnect</button>
+    </div>
+  </div>
+</div>
+
+<!-- DISCONNECT MODAL -->
+<div id="modal-disconnect" class="modal-backdrop" style="display: none;">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3 class="modal-title">Confirm Controlled Disconnect</h3>
+      <button class="modal-close" onclick="closeModal('modal-disconnect');">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size: 0.875rem; color: #94a3b8; margin-bottom: 1rem;">
+        This requests a graceful shutdown of the active WhatsApp Web browser session. Cached profile credentials will be preserved on disk.
+      </p>
+      <label style="display: block; font-size: 0.8125rem; margin-bottom: 0.5rem; color: #cbd5e1;">Operational Rationale (Required):</label>
+      <input type="text" id="disconnect-reason" class="form-input" placeholder="e.g. Scheduled host maintenance" style="width: 100%; margin-bottom: 1rem;">
+    </div>
+    <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+      <button class="btn btn-secondary" onclick="closeModal('modal-disconnect');">Cancel</button>
+      <button class="btn btn-secondary" onclick="submitDisconnect();" style="border-color: #f59e0b; color: #f59e0b;">Submit Disconnect</button>
+    </div>
+  </div>
+</div>
+
+<!-- LOGOUT MODAL -->
+<div id="modal-logout" class="modal-backdrop" style="display: none;">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3 class="modal-title" style="color: #ef4444;">Confirm Session Logout &amp; Reset</h3>
+      <button class="modal-close" onclick="closeModal('modal-logout');">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size: 0.875rem; color: #ef4444; margin-bottom: 1rem;">
+        <strong>Warning:</strong> Logging out terminates the session. If "Clear Cache" is checked, cached session credentials will be permanently erased from the Worker host.
+      </p>
+      <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; font-size: 0.875rem; color: #f8fafc;">
+        <input type="checkbox" id="logout-clear-cache">
+        Wipe persistent profile cache from disk (requires new QR scan)
+      </label>
+      <label style="display: block; font-size: 0.8125rem; margin-bottom: 0.5rem; color: #cbd5e1;">Operational Rationale (Required):</label>
+      <input type="text" id="logout-reason" class="form-input" placeholder="e.g. Re-pairing with new company phone number" style="width: 100%; margin-bottom: 1rem;">
+      <label style="display: block; font-size: 0.8125rem; margin-bottom: 0.5rem; color: #ef4444;">Type 'CONFIRM-LOGOUT' to proceed:</label>
+      <input type="text" id="logout-confirm-phrase" class="form-input" placeholder="CONFIRM-LOGOUT" style="width: 100%; margin-bottom: 1rem;">
+    </div>
+    <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+      <button class="btn btn-secondary" onclick="closeModal('modal-logout');">Cancel</button>
+      <button class="btn btn-danger" onclick="submitLogout();">Submit Logout</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function getCsrfToken() {
+  const match = document.cookie.match(new RegExp('(^| )outreach_csrf_token=([^;]+)'));
+  return match ? match[2] : '';
+}
+
+function showBanner(message, isError) {
+  const banner = document.getElementById('command-feedback-banner');
+  banner.className = isError ? 'alert alert-danger' : 'alert alert-info';
+  banner.innerText = message;
+  banner.style.display = 'block';
+  setTimeout(() => { banner.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 100);
+}
+
+function openModal(id) { document.getElementById(id).style.display = 'flex'; }
+function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+function openReconnectModal() { openModal('modal-reconnect'); }
+function openDisconnectModal() { openModal('modal-disconnect'); }
+function openLogoutModal() { openModal('modal-logout'); }
+
+async function triggerHealthCheck() {
+  try {
+    const res = await fetch('/api/v1/whatsapp/health-check', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showBanner(data.meta?.message || 'Health check requested.', false);
+      setTimeout(() => window.location.reload(), 2000);
+    } else {
+      showBanner(data.detail || 'Health check request failed.', true);
+    }
+  } catch (e) {
+    showBanner('Network error submitting health check.', true);
+  }
+}
+
+async function submitReconnect() {
+  const reason = document.getElementById('reconnect-reason').value.trim();
+  if (!reason) { alert('Operational rationale is required.'); return; }
+  closeModal('modal-reconnect');
+
+  try {
+    const res = await fetch('/api/v1/whatsapp/reconnect', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCsrfToken()
+      },
+      body: JSON.stringify({ reason: reason })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showBanner(data.meta?.message || 'Reconnect requested.', false);
+      setTimeout(() => window.location.reload(), 2000);
+    } else {
+      showBanner(data.detail || 'Reconnect request failed.', true);
+    }
+  } catch (e) {
+    showBanner('Network error submitting reconnect.', true);
+  }
+}
+
+async function submitDisconnect() {
+  const reason = document.getElementById('disconnect-reason').value.trim();
+  if (!reason) { alert('Operational rationale is required.'); return; }
+  closeModal('modal-disconnect');
+
+  try {
+    const res = await fetch('/api/v1/whatsapp/disconnect', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCsrfToken()
+      },
+      body: JSON.stringify({ reason: reason })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showBanner(data.meta?.message || 'Controlled disconnect requested.', false);
+      setTimeout(() => window.location.reload(), 2000);
+    } else {
+      showBanner(data.detail || 'Disconnect request failed.', true);
+    }
+  } catch (e) {
+    showBanner('Network error submitting disconnect.', true);
+  }
+}
+
+async function submitLogout() {
+  const reason = document.getElementById('logout-reason').value.trim();
+  const phrase = document.getElementById('logout-confirm-phrase').value.trim();
+  const clearCache = document.getElementById('logout-clear-cache').checked;
+
+  if (!reason) { alert('Operational rationale is required.'); return; }
+  if (phrase !== 'CONFIRM-LOGOUT') { alert('Confirmation phrase must match exactly CONFIRM-LOGOUT.'); return; }
+  closeModal('modal-logout');
+
+  try {
+    const res = await fetch('/api/v1/whatsapp/logout', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCsrfToken()
+      },
+      body: JSON.stringify({ confirm_phrase: phrase, clear_cache: clearCache, reason: reason })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showBanner(data.meta?.message || 'Logout requested.', false);
+      setTimeout(() => window.location.reload(), 2000);
+    } else {
+      showBanner(data.detail || 'Logout request failed.', true);
+    }
+  } catch (e) {
+    showBanner('Network error submitting logout.', true);
+  }
+}
+
+async function clearStaleCommand() {
+  if (!confirm('Are you sure you want to clear the active in-flight command?')) return;
+  try {
+    const res = await fetch('/api/v1/whatsapp/commands/clear-stale', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCsrfToken()
+      }
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showBanner(data.meta?.message || 'Stale command cleared.', false);
+      setTimeout(() => window.location.reload(), 1500);
+    } else {
+      showBanner(data.detail || 'Failed to clear command.', true);
+    }
+  } catch (e) {
+    showBanner('Network error clearing command.', true);
+  }
+}
+</script>
+{% endblock %}

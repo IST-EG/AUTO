@@ -22,6 +22,7 @@ from app.web.services.contact_service import ContactService
 from app.web.services.queue_service import WebQueueService
 from app.web.services.campaign_contact_service import CampaignContactService
 from app.web.services.analytics_web_service import AnalyticsWebService
+from app.web.services.whatsapp_service import WhatsAppWebService
 
 templates_dir = Path(__file__).resolve().parent.parent.parent / "templates"
 templates = Jinja2Templates(directory=str(templates_dir))
@@ -566,3 +567,33 @@ def analytics_campaign_detail_page(
             "end_date": end_date or "",
         },
     )
+
+
+@router.get("/whatsapp", response_class=HTMLResponse)
+def whatsapp_operations_page(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_optional),
+):
+    """Renders WhatsApp Operations & Session Control Center console."""
+    if BootstrapService.is_setup_available(db):
+        return RedirectResponse(url="/setup", status_code=302)
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=302)
+
+    status_data = WhatsAppWebService.get_status(db)
+    diagnostics_data = WhatsAppWebService.get_diagnostics(db)
+    recent_logs = WhatsAppWebService.get_recent_audit_logs(db, limit=15)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="whatsapp/index.html",
+        context={
+            "current_user": current_user,
+            "status": status_data,
+            "diagnostics": diagnostics_data,
+            "recent_logs": recent_logs,
+            "active_nav": "whatsapp",
+        },
+    )
+

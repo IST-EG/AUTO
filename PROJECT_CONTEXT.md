@@ -12,7 +12,8 @@
 - **Phase 7.3: Campaigns, Templates & Contacts Control Center** — **IMPLEMENTED & APPROVED**
 - **Phase 7.4: Queue & Message Operations Control Center** — **IMPLEMENTED & APPROVED**
 - **Production Deployment Checkpoint: Vercel + Supabase + Dedicated Worker VPS** — **IMPLEMENTED & APPROVED**
-- **Phase 7.5: Analytics & Reporting Control Center** — **IMPLEMENTED & VERIFIED — AWAITING VERIFICATION APPROVAL**
+- **Phase 7.5: Analytics & Reporting Control Center** — **IMPLEMENTED & APPROVED**
+- **Phase 7.6: WhatsApp Operations & Session Control Center** — **IMPLEMENTED & VERIFIED — AWAITING VERIFICATION APPROVAL**
 
 ---
 
@@ -498,3 +499,36 @@ The system is strictly provider-agnostic. All browser and WhatsApp Web automatio
    - `/analytics`: Executive overview dashboard with date preset toolbar, 4 primary KPI cards, live queue strip, pure SVG throughput histogram, and campaign performance table.
    - `/analytics/campaigns/{id}`: Detailed single campaign view with audience funnel, contact completion % progress bar, 8-state message distribution grid, and pacing safeguards.
    - `base.html`: Activated `/analytics` sidebar link.
+
+---
+
+## 8. Phase 7.6: WhatsApp Operations & Session Control Center — Implementation
+
+### Core Principles & Architecture
+1. **Three-Tier Topological Boundaries**:
+   - **Vercel Control Plane**: 100% Stateless UI & REST API (`app/web/`). Zero `selenium` or browser imports, zero `subprocess.Popen` / `os.kill` calls. Submits commands and reads telemetry via database state.
+   - **Data Plane**: Supabase PostgreSQL. Houses `app_settings` for command state coordination (`system:desired_whatsapp_command`) and worker telemetry (`system:whatsapp_telemetry`).
+   - **Execution Plane**: Dedicated Worker VPS (`app/runner/production_runner.py`). Exclusively owns browser lifecycle, Chrome process, persistent profile, and WhatsApp Web automation.
+
+2. **Deterministic Command Delivery Protocol (Single In-Flight)**:
+   - State transition pipeline: `REQUESTED` $\to$ `CLAIMED` $\to$ `EXECUTING` $\to$ `COMPLETED` / `FAILED`.
+   - **Single In-Flight Serialization**: Any submission while another command is in active state (`REQUESTED`, `CLAIMED`, `EXECUTING`) returns **HTTP 409 Conflict**.
+   - **Atomic CAS Claim**: Worker claims `REQUESTED` command using optimistic version check (`UPDATE app_settings SET value = ... WHERE key = ... AND value LIKE '%"version": N%'`).
+   - **60-Second Execution Lease**: Leases automatically expire after 60 seconds (`lease_expires_at`).
+   - **Crash / Orphan Recovery**: Worker recovers orphaned leases upon startup or reconciliation loop. Admin can invoke `/api/v1/whatsapp/commands/clear-stale` with audit logging.
+   - **Observability by Request ID**: `GET /api/v1/whatsapp/commands/{request_id}` returns precise status, error, and timestamp lifecycle.
+
+3. **Semantic Operations Matrix ("Emergency Disconnect" Removed)**:
+   - **Health Check (`POST /api/v1/whatsapp/health-check`)**: OPERATOR+, non-destructive UI element ping.
+   - **Reconnect / Recovery (`POST /api/v1/whatsapp/reconnect`)**: OPERATOR+, soft recovery reloading DOM and re-evaluating session readiness.
+   - **Controlled Disconnect (`POST /api/v1/whatsapp/disconnect`)**: OPERATOR+, graceful session shutdown releasing Chrome and profile lock cleanly.
+   - **Logout / Reset Session (`POST /api/v1/whatsapp/logout`)**: ADMIN/OWNER only, requires confirmation phrase `CONFIRM-LOGOUT`. Gracefully shuts down session and unlinks credentials.
+   - **"Emergency Disconnect"**: Permanently excluded from design, codebase, and UI templates.
+
+4. **Zero Host Filesystem Leakage & Path Sanitization**:
+   - Raw binary paths (`/usr/bin/google-chrome`), profile storage paths (`./data/whatsapp_session`, `C:\Users\...`), and internal OS details are strictly redacted before serialization.
+   - Replaced with boolean and categorical indicators: `chrome_available` (bool), `chrome_version` (major version only or "N/A"), `profile_storage_state` (`"PRESENT"` / `"ABSENT"`), `profile_size_bytes` (integer), `profile_writable` (bool).
+
+5. **Integra Design System (IDS) UI**:
+   - `/whatsapp`: Live provider state banner, 4 KPI cards (Session State, In-Flight Command, Profile Storage, Lease Expiry), Operational Action cards with RBAC-governed modals, Sanitized Host Diagnostics card, and Operational Audit Trail table.
+   - Sidebar link activated in `base.html`.

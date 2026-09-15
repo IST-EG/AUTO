@@ -61,6 +61,8 @@ class ProductionRunner:
         self.emergency_stop = EmergencyStop(db)
         self.circuit_breaker = CircuitBreaker(db)
         self.queue_service = PersistentQueueService(db)
+        from app.runner.whatsapp_command_handler import WhatsAppCommandHandler
+        self.whatsapp_command_handler = WhatsAppCommandHandler(db=db, worker_id=self.worker_id, provider=self.provider)
 
         self._last_heartbeat_time = 0.0
         self._last_stats_log_time = 0.0
@@ -114,6 +116,7 @@ class ProductionRunner:
                     browser_timeout=settings.WHATSAPP_BROWSER_TIMEOUT,
                     qr_timeout=settings.WHATSAPP_QR_TIMEOUT,
                 )
+            self.whatsapp_command_handler.provider = self.provider
 
             logger.info("Verifying provider connection and health...")
             self.lifecycle.transition_to(RunnerLifecycleState.AUTHENTICATING, "Connecting provider")
@@ -130,10 +133,12 @@ class ProductionRunner:
                 self.lifecycle.transition_to(RunnerLifecycleState.FAILED, "Provider health check failed")
                 return ExitCode.AUTHENTICATION_REQUIRED
 
-            # 5. Startup stale lease recovery
+            # 5. Startup stale lease recovery & command orphan recovery
             recovered_leases = self.queue_service.recover_stale_leases()
             if recovered_leases > 0:
                 logger.info(f"Startup reconciliation: recovered {recovered_leases} stale message leases.")
+            self.whatsapp_command_handler.recover_orphans()
+            self.whatsapp_command_handler.publish_telemetry()
 
             # 6. Initialize QueueWorker
             self._worker = QueueWorker(
@@ -162,7 +167,11 @@ class ProductionRunner:
                 # Maintain periodic heartbeat
                 if now_mono - self._last_heartbeat_time >= settings.RUNNER_HEARTBEAT_SECONDS:
                     self.process_lock.update_heartbeat()
+                    self.whatsapp_command_handler.publish_telemetry()
                     self._last_heartbeat_time = now_mono
+
+                # Process any pending operational WhatsApp commands
+                self.whatsapp_command_handler.poll_and_execute()
 
                 # Check safe cancellation point 0: Desired runner state from DB coordination
                 desired_setting = self.db.query(AppSetting).filter(AppSetting.key == "system:desired_runner_state").first()

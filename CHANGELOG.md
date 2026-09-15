@@ -2,7 +2,40 @@
 
 All notable changes to this project are documented in this file.
 
-## [Phase 7.5] - 2026-09-12 — IMPLEMENTED & VERIFIED (AWAITING VERIFICATION APPROVAL)
+## [Phase 7.6] - 2026-09-15 — IMPLEMENTED & VERIFIED (AWAITING VERIFICATION APPROVAL)
+### Added
+- **Deterministic WhatsApp Command Protocol**:
+  - Implemented single in-flight command serialization with optimistic CAS (`version` check) in `app/services/whatsapp_command_service.py`.
+  - State lifecycle transitions: `REQUESTED` $\to$ `CLAIMED` $\to$ `EXECUTING` $\to$ `COMPLETED` / `FAILED`.
+  - Enforced single in-flight serialization returning HTTP 409 Conflict upon concurrent request submissions.
+  - 60-second lease with automatic stale and orphaned command recovery on worker startup and main loop.
+- **WhatsApp Web Operations REST API (`/api/v1/whatsapp/*`)**:
+  - `GET /api/v1/whatsapp/status`: Live connection, session state, in-flight command, and sanitized storage status.
+  - `GET /api/v1/whatsapp/diagnostics`: Fully sanitized host diagnostics (Chrome binary availability, major version, profile writable state, profile directory size).
+  - `GET /api/v1/whatsapp/commands/{request_id}`: Granular lifecycle tracking of in-flight or completed commands.
+  - `POST /api/v1/whatsapp/health-check`: OPERATOR+ non-destructive UI element ping.
+  - `POST /api/v1/whatsapp/reconnect`: OPERATOR+ soft recovery reloading DOM and re-authenticating.
+  - `POST /api/v1/whatsapp/disconnect`: OPERATOR+ controlled graceful session shutdown releasing Chrome and profile locks.
+  - `POST /api/v1/whatsapp/logout`: ADMIN/OWNER destructive session unlink requiring confirmation phrase `CONFIRM-LOGOUT`.
+  - `POST /api/v1/whatsapp/commands/clear-stale`: ADMIN/OWNER administrative lease override with audit logging.
+- **Worker-Side WhatsApp Command Handler (`app/runner/whatsapp_command_handler.py`)**:
+  - Integrated into `ProductionRunner` for polling, claiming, executing domain operations, and emitting telemetry to `system:whatsapp_telemetry`.
+  - Startup orphan recovery reconciling crashed or abandoned command leases.
+- **Integra Design System (IDS) UI Views (`/whatsapp`)**:
+  - Top provider status banner with semantic disclaimer guarantee.
+  - 4 primary KPI cards: Session State, In-Flight Command, Profile Storage, Lease Expiration.
+  - Controlled action panels with confirmation modals and CSRF token protection.
+  - Operational runbook guidance and sanitized diagnostics card.
+  - Operational audit trail displaying real-time command dispatch history.
+  - Complete removal of legacy "Emergency Disconnect".
+  - Active sidebar navigation link in `app/web/templates/base.html`.
+- **Testing & Verification**:
+  - 22 new tests across command service, operations API, UI rendering, and architectural boundaries.
+  - Complete regression run: 408 tests passing, 0 failing (100% pass rate).
+
+---
+
+## [Phase 7.5] - 2026-09-12 — APPROVED
 ### Added
 - **Analytics & Reporting Control Center (`/analytics`, `/analytics/campaigns/{id}`)**:
   - Executive analytics dashboard featuring time-window filtering (`today`, `yesterday`, `last_7_days`, `last_30_days`, `custom`), 4 primary KPI cards, live queue health strip, responsive SVG throughput histogram, and campaign performance table.

@@ -118,7 +118,7 @@
         <!-- SYSTEM (Future Scope) -->
         <div class="sidebar-group">
           <div class="sidebar-group-title">System</div>
-          <span class="sidebar-link disabled" title="Future Release">
+          <a href="/whatsapp" class="sidebar-link {% if active_nav == 'whatsapp' or (request and request.url.path.startswith('/whatsapp')) %}active{% endif %}">
             <span class="sidebar-link-content">
               <span class="sidebar-link-icon">
                 <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -127,8 +127,7 @@
               </span>
               <span>WhatsApp</span>
             </span>
-            <span class="sidebar-badge">Soon</span>
-          </span>
+          </a>
           <span class="sidebar-link disabled" title="Future Release">
             <span class="sidebar-link-content">
               <span class="sidebar-link-icon">

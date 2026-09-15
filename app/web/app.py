@@ -35,6 +35,7 @@ from app.web.routes.api.campaigns import router as campaigns_api_router
 from app.web.routes.api.contacts import router as contacts_api_router
 from app.web.routes.api.queue import router as queue_api_router
 from app.web.routes.api.analytics import router as analytics_api_router
+from app.web.routes.api.whatsapp import router as whatsapp_api_router
 from app.web.routes.ui.views import router as ui_views_router
 
 
@@ -98,6 +99,7 @@ def create_app() -> FastAPI:
     app.include_router(contacts_api_router)
     app.include_router(queue_api_router)
     app.include_router(analytics_api_router)
+    app.include_router(whatsapp_api_router)
     app.include_router(ui_views_router)
 
     return app
