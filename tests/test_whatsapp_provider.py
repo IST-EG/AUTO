@@ -105,3 +105,12 @@ def test_provider_connect_flow(mock_session_manager):
 
     mock_session_manager.initialize_session.assert_called_once()
     mock_session_manager.await_authentication.assert_called_once()
+
+
+def test_provider_propagates_custom_paths():
+    provider = WhatsAppWebProvider(
+        chrome_binary="/opt/custom/chrome",
+        chromedriver_path="/opt/custom/chromedriver",
+    )
+    assert provider.browser.chrome_binary == "/opt/custom/chrome"
+    assert provider.browser.chromedriver_path == "/opt/custom/chromedriver"

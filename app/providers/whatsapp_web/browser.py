@@ -21,6 +21,9 @@ from app.providers.whatsapp_web.exceptions import (
 logger = logging.getLogger(__name__)
 
 
+from app.utils.settings import settings
+
+
 class WhatsAppBrowser:
     """
     Dedicated browser controller encapsulating Selenium operations on WhatsApp Web.
@@ -35,13 +38,15 @@ class WhatsAppBrowser:
         browser_timeout: int = 30,
         page_load_timeout: int = 45,
         chrome_binary: Optional[str] = None,
+        chromedriver_path: Optional[str] = None,
         driver: Optional[Any] = None
     ):
         self.session_path = os.path.abspath(session_path)
         self.headless = headless
         self.browser_timeout = browser_timeout
         self.page_load_timeout = page_load_timeout
-        self.chrome_binary = chrome_binary
+        self.chrome_binary = chrome_binary or (getattr(settings, "WHATSAPP_CHROME_BINARY", "") or None)
+        self.chromedriver_path = chromedriver_path or (getattr(settings, "WHATSAPP_CHROMEDRIVER_PATH", "") or None)
         self.driver = driver
 
     def is_alive(self) -> bool:
@@ -81,7 +86,15 @@ class WhatsAppBrowser:
             if self.chrome_binary:
                 options.binary_location = self.chrome_binary
 
-            self.driver = webdriver.Chrome(options=options)
+            service = None
+            if self.chromedriver_path:
+                service = Service(executable_path=self.chromedriver_path)
+
+            if service:
+                self.driver = webdriver.Chrome(service=service, options=options)
+            else:
+                self.driver = webdriver.Chrome(options=options)
+
             self.driver.set_page_load_timeout(self.page_load_timeout)
         except Exception as e:
             logger.error(f"Failed to start ChromeDriver: {e}")

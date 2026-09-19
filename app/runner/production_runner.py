@@ -115,6 +115,8 @@ class ProductionRunner:
                     headless=settings.WHATSAPP_HEADLESS,
                     browser_timeout=settings.WHATSAPP_BROWSER_TIMEOUT,
                     qr_timeout=settings.WHATSAPP_QR_TIMEOUT,
+                    chrome_binary=settings.WHATSAPP_CHROME_BINARY or None,
+                    chromedriver_path=settings.WHATSAPP_CHROMEDRIVER_PATH or None,
                 )
             self.whatsapp_command_handler.provider = self.provider
 

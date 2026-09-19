@@ -33,6 +33,8 @@ def handle_session_login(args, db: Session, session_manager=None) -> ExitCode:
             session_path=settings.WHATSAPP_SESSION_PATH,
             headless=getattr(args, "headless", False),
             browser_timeout=settings.WHATSAPP_BROWSER_TIMEOUT,
+            chrome_binary=settings.WHATSAPP_CHROME_BINARY or None,
+            chromedriver_path=settings.WHATSAPP_CHROMEDRIVER_PATH or None,
         )
         session_manager = WhatsAppSessionManager(
             browser=browser,

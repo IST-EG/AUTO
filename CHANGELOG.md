@@ -2,7 +2,18 @@
 
 All notable changes to this project are documented in this file.
 
-## [Phase 7.6] - 2026-09-15 — IMPLEMENTED & VERIFIED (AWAITING VERIFICATION APPROVAL)
+## [Phase 7.7] - 2026-09-20 — IMPLEMENTED & VERIFIED
+### Added
+- **Oracle Cloud A1 ARM64 Browser POC & Binary Configuration Plumbing**:
+  - Validated headless Chromium execution on Oracle Cloud Always Free A1 Flex (Ubuntu 24.04 LTS, aarch64, 2 OCPU, 12 GB RAM, 4 GB swap).
+  - Identified and resolved Canonical Snap wrapper limitation: `/snap/bin/chromium` fails with `execvp: /snap/bin/chromium`; verified raw ELF binary path `/snap/chromium/current/usr/lib/chromium-browser/chrome` and system ChromeDriver `/usr/bin/chromedriver`.
+  - Wired canonical settings (`WHATSAPP_CHROME_BINARY` and `WHATSAPP_CHROMEDRIVER_PATH`) through `Settings` $\to$ `WhatsAppWebProvider` $\to$ `WhatsAppBrowser` $\to$ Selenium `Service(executable_path=...)` and `options.binary_location`.
+  - Propagated browser and driver configuration in `app/runner/production_runner.py` and `app/cli/commands/session.py`.
+  - Preserved strict backward compatibility for Windows and standard Google Chrome environments when custom paths are left unconfigured.
+  - Documented Snap Chromium symlink and ChromeDriver configuration in `deploy/worker/env.worker.example`.
+  - Added comprehensive unit tests in `tests/test_whatsapp_browser_mock.py` and `tests/test_whatsapp_provider.py` covering default, explicit, and settings-fallback driver and binary resolution.
+
+## [Phase 7.6] - 2026-09-15 — APPROVED
 ### Added
 - **Deterministic WhatsApp Command Protocol**:
   - Implemented single in-flight command serialization with optimistic CAS (`version` check) in `app/services/whatsapp_command_service.py`.

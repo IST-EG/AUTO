@@ -35,7 +35,9 @@ class WhatsAppWebProvider(MessageProvider):
         headless: bool = False,
         browser_timeout: int = 30,
         qr_timeout: int = 120,
-        send_confirmation_timeout: float = 15.0
+        send_confirmation_timeout: float = 15.0,
+        chrome_binary: Optional[str] = None,
+        chromedriver_path: Optional[str] = None,
     ):
         if session_manager is not None:
             self.session_manager = session_manager
@@ -44,7 +46,9 @@ class WhatsAppWebProvider(MessageProvider):
             self.browser = WhatsAppBrowser(
                 session_path=session_path,
                 headless=headless,
-                browser_timeout=browser_timeout
+                browser_timeout=browser_timeout,
+                chrome_binary=chrome_binary,
+                chromedriver_path=chromedriver_path,
             )
             self.session_manager = WhatsAppSessionManager(
                 browser=self.browser,

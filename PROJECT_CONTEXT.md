@@ -532,3 +532,43 @@ The system is strictly provider-agnostic. All browser and WhatsApp Web automatio
 5. **Integra Design System (IDS) UI**:
    - `/whatsapp`: Live provider state banner, 4 KPI cards (Session State, In-Flight Command, Profile Storage, Lease Expiry), Operational Action cards with RBAC-governed modals, Sanitized Host Diagnostics card, and Operational Audit Trail table.
    - Sidebar link activated in `base.html`.
+
+---
+
+## 9. Phase 7.7: Oracle A1 Browser POC Update & Configuration Plumbing — Implementation
+
+### Infrastructure Verification & Topological Contract
+1. **Host Environment**:
+   - Oracle Cloud Always Free A1 Flex instance.
+   - OS: Ubuntu 24.04 LTS (Noble Numbat), ARM64 (`aarch64`).
+   - Hardware: 2 OCPU (Ampere Altra), 12 GB RAM, 4 GB swap, ~45 GB NVMe root filesystem.
+   - Network: Public internet egress, HTTPS inbound/outbound.
+
+2. **Topological Invariant Maintained**:
+   - **Vercel Control Plane**: Remains 100% stateless (`app/web/`), zero browser execution, zero Selenium imports.
+   - **Data Plane**: Supabase PostgreSQL. Authoritative data store.
+   - **Dedicated Execution Worker**: Oracle Cloud A1 ARM64 instance running `ProductionRunner` as a systemd service.
+
+3. **Snap Chromium Architecture & Root-Cause Discovery**:
+   - On Ubuntu 24.04 ARM64, Chromium is packaged strictly via Canonical Snap (`chromium 152.0.7977.82`).
+   - Invoking `/snap/bin/chromium` from ChromeDriver / Selenium fails unconditionally with:
+     `LaunchProcess: failed to execvp: /snap/bin/chromium`
+     This occurs because `/snap/bin/chromium` is an AppArmor/cgroup wrapper script, not a raw ELF executable.
+   - **Verified Working Path**: `/snap/chromium/current/usr/lib/chromium-browser/chrome` (direct ELF binary, accessed via Canonical's stable `current` symlink to prevent hardcoding ephemeral snap revision IDs like `3527`).
+   - **Verified Working Driver**: `/usr/bin/chromedriver` (Chromium WebDriver 152.0.7977.82).
+
+4. **Configuration Plumbing**:
+   - Canonical settings preserved: `WHATSAPP_CHROME_BINARY`, `WHATSAPP_CHROMEDRIVER_PATH`, `WHATSAPP_SESSION_PATH`, `WHATSAPP_HEADLESS`.
+   - Zero alias environment variables introduced.
+   - Plumbed strictly: `Settings` $\to$ `WhatsAppWebProvider` $\to$ `WhatsAppBrowser` $\to$ Selenium `Service(executable_path=...)` and `options.binary_location`.
+   - `WhatsAppBrowser.start()`:
+     - Sets `options.binary_location = self.chrome_binary` when configured.
+     - Creates `Service(executable_path=self.chromedriver_path)` when configured.
+     - Gracefully falls back to default `webdriver.Chrome(options=options)` when paths are omitted or empty, preserving Windows / local dev auto-discovery.
+   - `production_runner.py` and `app/cli/commands/session.py` propagate configured paths directly.
+   - `deploy/worker/env.worker.example` documented with both standard x86_64 Chrome and Oracle A1 Snap Chromium configurations.
+
+5. **Safety, Policy & Scope Constraints**:
+   - Zero anti-ban, zero stealth flags, zero CAPTCHA bypass.
+   - Zero real WhatsApp messages sent during verification.
+   - Full regression suite verified.

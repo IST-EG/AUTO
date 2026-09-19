@@ -113,3 +113,61 @@ def test_browser_quit(mock_driver):
     wb.quit()
     mock_driver.quit.assert_called_once()
     assert wb.driver is None
+
+
+def test_browser_start_default_without_custom_paths():
+    with patch("os.makedirs"), \
+         patch("selenium.webdriver.Chrome") as mock_chrome, \
+         patch("selenium.webdriver.chrome.service.Service") as mock_service, \
+         patch("app.providers.whatsapp_web.browser.settings") as mock_settings:
+        mock_settings.WHATSAPP_CHROME_BINARY = ""
+        mock_settings.WHATSAPP_CHROMEDRIVER_PATH = ""
+
+        wb = WhatsAppBrowser(session_path="/dummy/path", headless=True)
+        wb.start()
+
+        mock_service.assert_not_called()
+        mock_chrome.assert_called_once()
+        call_kwargs = mock_chrome.call_args.kwargs
+        assert "service" not in call_kwargs or call_kwargs.get("service") is None
+        assert call_kwargs["options"].binary_location == ""
+
+
+def test_browser_start_with_custom_paths_explicit():
+    with patch("os.makedirs"), \
+         patch("selenium.webdriver.Chrome") as mock_chrome, \
+         patch("selenium.webdriver.chrome.service.Service") as mock_service:
+        fake_service_instance = MagicMock()
+        mock_service.return_value = fake_service_instance
+
+        wb = WhatsAppBrowser(
+            session_path="/dummy/path",
+            headless=False,
+            chrome_binary="/snap/chromium/current/usr/lib/chromium-browser/chrome",
+            chromedriver_path="/usr/bin/chromedriver",
+        )
+        wb.start()
+
+        mock_service.assert_called_once_with(executable_path="/usr/bin/chromedriver")
+        mock_chrome.assert_called_once()
+        call_kwargs = mock_chrome.call_args.kwargs
+        assert call_kwargs["service"] == fake_service_instance
+        assert call_kwargs["options"].binary_location == "/snap/chromium/current/usr/lib/chromium-browser/chrome"
+
+
+def test_browser_start_with_settings_fallback():
+    with patch("os.makedirs"), \
+         patch("selenium.webdriver.Chrome") as mock_chrome, \
+         patch("selenium.webdriver.chrome.service.Service") as mock_service, \
+         patch("app.providers.whatsapp_web.browser.settings") as mock_settings:
+        mock_settings.WHATSAPP_CHROME_BINARY = "/usr/bin/google-chrome"
+        mock_settings.WHATSAPP_CHROMEDRIVER_PATH = "/usr/bin/chromedriver"
+
+        wb = WhatsAppBrowser(session_path="/dummy/path")
+        assert wb.chrome_binary == "/usr/bin/google-chrome"
+        assert wb.chromedriver_path == "/usr/bin/chromedriver"
+
+        wb.start()
+        mock_service.assert_called_once_with(executable_path="/usr/bin/chromedriver")
+        call_kwargs = mock_chrome.call_args.kwargs
+        assert call_kwargs["options"].binary_location == "/usr/bin/google-chrome"
