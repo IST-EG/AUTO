@@ -2,7 +2,29 @@
 
 All notable changes to this project are documented in this file.
 
-## [Phase 7.7] - 2026-09-20 — IMPLEMENTED & VERIFIED
+## [Phase 7.7-B] - 2026-09-22 — IMPLEMENTED & VERIFIED
+### Added
+- **Native Google Chrome for Testing ARM64 Integration into Production Architecture**:
+  - Replaced Snap-packaged headless Chromium with official Google Chrome for Testing Stable 153.0.8010.52 ARM64 binary (`/opt/google/chrome-for-testing/chrome`) and matching ChromeDriver (`/usr/local/bin/chromedriver`).
+  - Integrated virtual display execution via systemd `xvfb.service` (`Xvfb :99 -screen 0 1920x1080x24 -nolisten tcp`) running under `User=ubuntu`.
+  - Reconfigured `deploy/systemd/outreach-runner.service` with `User=ubuntu`, `Group=ubuntu`, `WorkingDirectory=/opt/whatsapp-outreach/app`, `Environment=DISPLAY=:99`, `Requires=xvfb.service`, `After=network.target xvfb.service`, and an `ExecStartPre` display readiness probe loop using `/usr/bin/xdpyinfo -display :99`.
+  - Verified systemd unit configuration via `systemd-analyze verify` with exit code 0.
+  - Updated `deploy/worker/env.worker.example` with canonical Chrome for Testing paths, production profile path, and documented mandatory non-headless mode (`WHATSAPP_HEADLESS=False`).
+  - Executed clean production profile cutover: preserved benchmark profile (`/home/ubuntu/cft_poc/pairing_test_profile`, 203 MB) untouched; archived old contaminated profile to timestamped backup; initialized fresh production profile at `/opt/whatsapp-outreach/data/whatsapp_session` with permissions `0700` (`drwx------`) owned by `ubuntu:ubuntu`.
+  - Enforced `PRODUCTION_BROWSER_READY` gate requiring 8 operational conditions before campaign queue message dequeuing begins.
+  - Strictly preserved `UNKNOWN_OUTCOME` operational quarantine semantics: post-click crashes are never treated as confirmed delivery failures, barred from blind auto-retries, and preserved for audited operator reconciliation.
+  - Zero application source code modifications in `app/`. Exactly zero database migrations required.
+- **Step 4 Production Profile Authentication & Multi-Stage Persistence Validation**:
+  - Successfully authenticated clean production profile (`/opt/whatsapp-outreach/data/whatsapp_session`) via manual operator QR scan at `2026-09-22T22:58:49.625191+03:00` (Africa/Cairo) via RealVNC on display `:99`.
+  - Verified `BROWSER_RESTART_PASS`: session restored directly without QR code in 8.38s across graceful Chrome restart; passed 120s post-restart stability observation across 8 samples with 0 crashes.
+  - Verified `VM_REBOOT_PERSISTENCE_PASS`: session restored directly without QR code in 8.47s across full Oracle VM host reboot (`sudo reboot`) with automatic `xvfb.service` initialization.
+  - Verified strict preflight check (`preflight --strict`): all 10 check categories evaluated to `[PASS]`.
+  - Verified `PRODUCTION_BROWSER_READY: PASSED`.
+  - Preserved benchmark profile (`/home/ubuntu/cft_poc/pairing_test_profile`) 100% untouched at 203 MB.
+  - Zero WhatsApp messages dispatched, zero queue messages processed.
+
+
+## [Phase 7.7] - 2026-09-20 — APPROVED
 ### Added
 - **Oracle Cloud A1 ARM64 Browser POC & Binary Configuration Plumbing**:
   - Validated headless Chromium execution on Oracle Cloud Always Free A1 Flex (Ubuntu 24.04 LTS, aarch64, 2 OCPU, 12 GB RAM, 4 GB swap).

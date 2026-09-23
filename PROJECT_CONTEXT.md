@@ -13,7 +13,9 @@
 - **Phase 7.4: Queue & Message Operations Control Center** — **IMPLEMENTED & APPROVED**
 - **Production Deployment Checkpoint: Vercel + Supabase + Dedicated Worker VPS** — **IMPLEMENTED & APPROVED**
 - **Phase 7.5: Analytics & Reporting Control Center** — **IMPLEMENTED & APPROVED**
-- **Phase 7.6: WhatsApp Operations & Session Control Center** — **IMPLEMENTED & VERIFIED — AWAITING VERIFICATION APPROVAL**
+- **Phase 7.6: WhatsApp Operations & Session Control Center** — **IMPLEMENTED & APPROVED**
+- **Phase 7.7: Oracle A1 Browser POC & Configuration Plumbing** — **IMPLEMENTED & APPROVED**
+- **Phase 7.7-B: Native Google Chrome for Testing ARM64 Integration** — **IMPLEMENTED & VERIFIED — READY FOR COMMIT**
 
 ---
 
@@ -572,3 +574,41 @@ The system is strictly provider-agnostic. All browser and WhatsApp Web automatio
    - Zero anti-ban, zero stealth flags, zero CAPTCHA bypass.
    - Zero real WhatsApp messages sent during verification.
    - Full regression suite verified.
+
+---
+
+## 10. Phase 7.7-B: Native Google Chrome for Testing ARM64 Production Integration
+
+### Core Principles & Architecture
+1. **Replacement of Snap Headless Chromium**:
+   - Replaced Canonical Snap-packaged Chromium in headless mode with official Google Chrome for Testing Stable 153.0.8010.52 ARM64 binary (`/opt/google/chrome-for-testing/chrome`) and matching ChromeDriver (`/usr/local/bin/chromedriver`).
+   - Virtual display provided by Xvfb on display `:99` (`Xvfb :99 -screen 0 1920x1080x24 -nolisten tcp`) via systemd `xvfb.service`.
+   - Execution mode strictly `WHATSAPP_HEADLESS=False` rendered onto Xvfb `:99`.
+
+2. **Systemd Process Model & Ordering**:
+   - Unit file: `deploy/systemd/outreach-runner.service`.
+   - Configured with `User=ubuntu`, `Group=ubuntu`, `WorkingDirectory=/opt/whatsapp-outreach/app`, `EnvironmentFile=/opt/whatsapp-outreach/.env`, and `Environment=DISPLAY=:99`.
+   - Ordering: `After=network.target xvfb.service` and `Requires=xvfb.service`.
+   - Display readiness probe: `ExecStartPre` polling loop checking `/usr/bin/xdpyinfo -display :99` ensuring the X11 display is active and listening before runner initialization.
+
+3. **Production Profile Strategy**:
+   - Benchmark test profile `/home/ubuntu/cft_poc/pairing_test_profile` (203 MB, reboot-verified) preserved completely untouched and isolated.
+   - Contaminated legacy profile safely archived with timestamped backup.
+   - Fresh independent production profile directory created at `/opt/whatsapp-outreach/data/whatsapp_session` with permissions `0700` (`drwx------`) owned by `ubuntu:ubuntu`.
+   - Automated pairing strictly prohibited; manual operator QR scan completed on September 22, 2026.
+
+4. **Step 4: Production Profile Authentication & Multi-Stage Persistence (VERIFIED)**:
+   - **Manual Operator QR Scan**: Successfully authenticated at `2026-09-22T22:58:49.625191+03:00` (Africa/Cairo) via RealVNC on `:99`.
+   - **Controlled Browser Restart Persistence**: Session restored immediately in 8.38s with zero QR prompts (`BROWSER_RESTART_PASS`).
+   - **Controlled VM Reboot Persistence**: Full Oracle OS reboot (`sudo reboot`) survived; session restored immediately in 8.47s with zero QR prompts (`VM_REBOOT_PERSISTENCE_PASS`).
+   - **Post-Pairing Stability**: 120-second stability observation completed with 0 renderer crashes and 0 JavaScript exceptions.
+   - **Strict Preflight Check**: `DISPLAY=:99 .venv/bin/python -m app.cli.main preflight --strict` passed (10/10 check categories PASS).
+   - **Production Readiness Gate**: `PRODUCTION_BROWSER_READY: PASSED`.
+   - **Safety Invariant**: 0 WhatsApp messages sent, 0 queue items processed, 0 database migrations, 0 application code drift. Benchmark profile untouched at 203M.
+
+5. **Safety Gates & Semantics Preserved**:
+   - `PRODUCTION_BROWSER_READY` gate enforces 8 conditions before campaign message dequeuing begins.
+   - Unauthenticated sessions immediately exit with `ExitCode.AUTHENTICATION_REQUIRED` (83).
+   - `UNKNOWN_OUTCOME` quarantined as a distinct operational state from confirmed delivery failures (`error_type != "PERMANENT"`). Never automatically retried; routed to operator inspection and audited reconciliation.
+   - Exactly **0** database migrations required.
+
