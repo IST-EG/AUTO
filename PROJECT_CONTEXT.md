@@ -612,3 +612,22 @@ The system is strictly provider-agnostic. All browser and WhatsApp Web automatio
    - `UNKNOWN_OUTCOME` quarantined as a distinct operational state from confirmed delivery failures (`error_type != "PERMANENT"`). Never automatically retried; routed to operator inspection and audited reconciliation.
    - Exactly **0** database migrations required.
 
+6. **Step 7: Control Plane ↔ Oracle Worker Handshake & PREFLIGHT Diagnostic Protocol (IMPLEMENTED)**:
+   - **Worker Identity (`WORKER_INSTANCE_ID`)**: Configurable, validated against `[a-z0-9-]` (3–64 chars), written to `system:worker_identity` AppSetting, safely exposed to dashboard without host IP/hostname.
+   - **Infrastructure Heartbeat (`system:worker_heartbeat`)**: 15s daemon loop writing safe infrastructure health snapshot (`uptime_seconds`, `xvfb_healthy`, `chrome_reachable`, `chromedriver_reachable`, `session_profile_present`).
+   - **Five Independent Health Dimensions**: Surfaced in `WhatsAppStatusDTO`:
+     1. Infrastructure: `infra_health` (`HEALTHY`, `DEGRADED`, `OFFLINE`, `UNKNOWN`)
+     2. Browser: `browser_state` (`CONNECTED`, `DISCONNECTED`, `AUTHENTICATING`, etc.)
+     3. WhatsApp Session: `session_authenticated`, `qr_required`
+     4. Runner: `is_runner_active`, `runner_state`, `desired_state`
+     5. Queue: Monitored independently via `/api/v1/queue`
+   - **PREFLIGHT Diagnostic Command**:
+     - Endpoint: `POST /api/v1/whatsapp/preflight` (gated by `require_operator`, `verify_csrf`, and HTTP 409 conflict serialization).
+     - Lease: 120 seconds (vs 60s for standard commands).
+     - Safety invariants strictly enforced: **MUST NOT cold-start Chrome, MUST NOT launch WhatsApp Web, MUST NOT send messages**.
+     - Inspects active provider if already running; otherwise runs diagnostic checks without browser instantiation.
+     - Results persisted to `system:last_preflight_result`.
+   - **Database Impact**: Exactly **0** database migrations required.
+   - **Regression & Safety**: Zero regressions, production runner inactive, zero WhatsApp messages dispatched.
+
+

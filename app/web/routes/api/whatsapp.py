@@ -27,7 +27,9 @@ from app.web.schemas.whatsapp import (
     WhatsAppReconnectRequest,
     WhatsAppDisconnectRequest,
     WhatsAppLogoutRequest,
+    WhatsAppPreflightRequest,
 )
+
 from app.web.services.whatsapp_service import WhatsAppWebService
 from app.services.whatsapp_command_service import WhatsAppCommandService
 
@@ -208,3 +210,40 @@ def clear_stale_command(
             detail=message,
         )
     return APIResponse.ok({"cleared": success}, meta={"message": message})
+
+
+@router.post("/preflight", response_model=APIResponse[dict], dependencies=[Depends(verify_csrf)])
+def request_preflight(
+    payload: WhatsAppPreflightRequest = WhatsAppPreflightRequest(),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_operator),
+):
+    """
+    Submits a PREFLIGHT diagnostic/readiness command to the Oracle worker.
+
+    Safety guarantees (enforced on the worker side):
+    - MUST NOT cold-start Chrome or ChromeDriver.
+    - MUST NOT launch WhatsApp Web.
+    - MUST NOT send messages.
+    - If a provider/browser is already active, it may be queried (not launched).
+    - Infrastructure checks (Xvfb presence, Chrome binary discovery, session
+      profile presence) are always safe to run.
+
+    Lease: 120 seconds (extended to accommodate infrastructure probes).
+    Role: OPERATOR, ADMIN, OWNER. Requires CSRF.
+    Enforces single-inflight command serialization (HTTP 409 Conflict if busy).
+    """
+    success, message, data = WhatsAppCommandService.submit_command(
+        db=db,
+        action="PREFLIGHT",
+        requested_by=current_user.username,
+        requested_by_id=current_user.id,
+        params={"reason": payload.reason},
+    )
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=message,
+        )
+    return APIResponse.ok(data, meta={"message": message})
+

@@ -4,6 +4,17 @@ from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
 from app.models import *
+from app.utils.settings import settings
+
+
+@pytest.fixture(scope="session", autouse=True)
+def configure_test_worker_instance_id():
+    """Sets a valid test WORKER_INSTANCE_ID so integration tests run in a configured worker environment."""
+    old_id = getattr(settings, "WORKER_INSTANCE_ID", "")
+    settings.WORKER_INSTANCE_ID = "test-worker-01"
+    yield
+    settings.WORKER_INSTANCE_ID = old_id
+
 
 @pytest.fixture(scope="session")
 def engine():

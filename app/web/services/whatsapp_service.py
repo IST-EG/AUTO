@@ -19,6 +19,8 @@ from app.models.audit_log import AuditLog
 from app.web.services.runner_control_service import RunnerControlService
 from app.services.whatsapp_command_service import WhatsAppCommandService
 from app.utils.settings import settings
+from app.web.schemas.whatsapp import WorkerInfraHealthEnum
+
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +29,10 @@ class WhatsAppWebService:
     """Service mediating WhatsApp operations visibility and diagnostics for Control Plane."""
 
     TELEMETRY_SETTING_KEY = "system:whatsapp_telemetry"
+    IDENTITY_SETTING_KEY = "system:worker_identity"
+    HEARTBEAT_SETTING_KEY = "system:worker_heartbeat"
+    PREFLIGHT_RESULT_KEY = "system:last_preflight_result"
+
 
     @classmethod
     def get_status(cls, db: Session) -> Dict[str, Any]:
@@ -125,6 +131,79 @@ class WhatsAppWebService:
         raw_snippet = telemetry.get("diagnostic_snippet", "")
         sanitized_snippet = raw_snippet if raw_snippet else None
 
+        # 9. Phase 7.7-B Step 7: Worker identity, heartbeat, and infra health dimensions
+
+        # Read worker identity
+        identity_row = db.query(AppSetting).filter(AppSetting.key == cls.IDENTITY_SETTING_KEY).first()
+        worker_identity: Optional[Dict[str, Any]] = None
+        if identity_row and identity_row.value:
+            try:
+                worker_identity = json.loads(identity_row.value)
+                # Strip any accidental credential fields (defense in depth)
+                for _unsafe_key in ("database_url", "password", "secret", "token", "api_key", "ssh_key"):
+                    worker_identity.pop(_unsafe_key, None)
+            except Exception:
+                pass
+
+        # Read worker heartbeat
+        heartbeat_row = db.query(AppSetting).filter(AppSetting.key == cls.HEARTBEAT_SETTING_KEY).first()
+        worker_heartbeat: Optional[Dict[str, Any]] = None
+        heartbeat_age: Optional[float] = None
+        raw_diff: Optional[float] = None
+        if heartbeat_row and heartbeat_row.value:
+            try:
+                worker_heartbeat = json.loads(heartbeat_row.value)
+                last_seen_str = worker_heartbeat.get("last_seen")
+                if last_seen_str:
+                    hb_dt = datetime.fromisoformat(last_seen_str.replace("Z", "+00:00"))
+                    raw_diff = (now_utc - hb_dt).total_seconds()
+                    # Absorb minor NTP/network tolerance for tiny negative deltas [-1.0s, 0s).
+                    # Substantial future timestamp (< -1.0s) is retained as-is to signal clock skew.
+                    if raw_diff < -1.0:
+                        heartbeat_age = raw_diff
+                    else:
+                        heartbeat_age = max(0.0, raw_diff)
+            except Exception:
+                pass
+
+        # Compute infrastructure health state
+        if worker_heartbeat is None:
+            infra_health = WorkerInfraHealthEnum.UNKNOWN
+        elif raw_diff is not None and raw_diff < -1.0:
+            # Heartbeat timestamp is in the future (>1.0s): clock skew detected -> DEGRADED
+            infra_health = WorkerInfraHealthEnum.DEGRADED
+        elif heartbeat_age is not None and heartbeat_age >= 60:
+            infra_health = WorkerInfraHealthEnum.OFFLINE
+        elif heartbeat_age is not None and heartbeat_age >= 30:
+            infra_health = WorkerInfraHealthEnum.DEGRADED
+        elif (
+            worker_heartbeat.get("xvfb_healthy", False)
+            and worker_heartbeat.get("chrome_reachable", False)
+        ):
+            infra_health = WorkerInfraHealthEnum.HEALTHY
+        else:
+            infra_health = WorkerInfraHealthEnum.DEGRADED
+
+        # Enrich heartbeat dict with computed age
+        if worker_heartbeat is not None and heartbeat_age is not None:
+            worker_heartbeat = dict(worker_heartbeat)
+            worker_heartbeat["heartbeat_age_seconds"] = round(heartbeat_age, 1)
+            worker_heartbeat["infra_health"] = infra_health.value
+
+        # Dimension 3: session authentication inference
+        session_state_str = telemetry.get("state", "DISCONNECTED") if is_runner_active else "DISCONNECTED"
+        session_authenticated = session_state_str in ("CONNECTED",)
+        qr_required = session_state_str in ("AUTHENTICATING",) or storage_state == "EMPTY"
+
+        # Read last preflight result
+        preflight_row = db.query(AppSetting).filter(AppSetting.key == cls.PREFLIGHT_RESULT_KEY).first()
+        last_preflight_result: Optional[Dict[str, Any]] = None
+        if preflight_row and preflight_row.value:
+            try:
+                last_preflight_result = json.loads(preflight_row.value)
+            except Exception:
+                pass
+
         return {
             "state": state,
             "health_state": health_state,
@@ -146,7 +225,20 @@ class WhatsAppWebService:
             "last_completed_command": last_cmd,
             "diagnostic_snippet": sanitized_snippet,
             "disclaimer": "SEND_CONFIRMED represents WhatsApp Web UI send confirmation only, not delivery or read receipts.",
+            # --- Phase 7.7-B Step 7: Five independent health dimensions ---
+            # Dimension 1: Infrastructure
+            "worker_identity": worker_identity,
+            "worker_heartbeat": worker_heartbeat,
+            "infra_health": infra_health.value,
+            # Dimension 2: Browser
+            "browser_state": telemetry.get("state") if is_runner_active else "DISCONNECTED",
+            # Dimension 3: Session
+            "session_authenticated": session_authenticated,
+            "qr_required": qr_required,
+            # (Dimensions 4=runner, 5=queue are covered by runner_* fields and /api/v1/queue)
+            "last_preflight_result": last_preflight_result,
         }
+
 
     @classmethod
     def get_diagnostics(cls, db: Session) -> Dict[str, Any]:

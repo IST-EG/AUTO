@@ -112,6 +112,43 @@ def check_configuration() -> CheckResult:
     )
 
 
+def check_worker_instance_id() -> CheckResult:
+    """
+    Validates that WORKER_INSTANCE_ID is present, a string, and satisfies the
+    validate_worker_instance_id() contract ([a-z0-9-], 3-64 chars, lowercase, operator-assigned).
+    """
+    from app.runner.whatsapp_command_handler import validate_worker_instance_id
+
+    instance_id = getattr(settings, "WORKER_INSTANCE_ID", "")
+    if not instance_id:
+        return CheckResult(
+            "Worker Identity",
+            False,
+            "WORKER_INSTANCE_ID is not configured in environment.",
+            ExitCode.INVALID_ARGUMENT,
+        )
+    if not isinstance(instance_id, str):
+        return CheckResult(
+            "Worker Identity",
+            False,
+            f"WORKER_INSTANCE_ID must be a string; found {type(instance_id).__name__}",
+            ExitCode.INVALID_ARGUMENT,
+        )
+    if not validate_worker_instance_id(instance_id):
+        return CheckResult(
+            "Worker Identity",
+            False,
+            f"WORKER_INSTANCE_ID '{instance_id}' is invalid. Must be [a-z0-9-], 3-64 characters, lowercase, operator-assigned.",
+            ExitCode.INVALID_ARGUMENT,
+        )
+    return CheckResult(
+        "Worker Identity",
+        True,
+        f"WORKER_INSTANCE_ID verified ('{instance_id}')",
+        ExitCode.SUCCESS,
+    )
+
+
 def check_directories_and_permissions() -> CheckResult:
     """Validates write permissions for data/ and logs/ directories."""
     dirs_to_check = [
@@ -300,6 +337,7 @@ def run_preflight(
 
     checks.append(check_python_runtime())
     checks.append(check_configuration())
+    checks.append(check_worker_instance_id())
     checks.append(check_directories_and_permissions())
     checks.append(check_database_connectivity(db))
     checks.append(check_database_schema(db))

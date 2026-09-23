@@ -130,7 +130,8 @@ def test_cli_preflight(db_session, capsys):
     captured_json = capsys.readouterr()
     data = json.loads(captured_json.out)
     assert data["passed"] is True
-    assert len(data["checks"]) == 10
+    assert len(data["checks"]) == 11
+
 
 
 def test_cli_system_health(db_session, capsys):

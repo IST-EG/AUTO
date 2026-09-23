@@ -112,6 +112,10 @@ class Settings(BaseSettings):
     RUNNER_REMOTE_COORDINATION: bool = False
     """Enable database-mediated desired state coordination (automatic on Vercel/serverless)."""
 
+    WORKER_INSTANCE_ID: str = ""
+    """Stable human-readable worker instance label. Format: [a-z0-9-], 3–64 chars.
+    Example: oracle-arm64-worker-01. Operator-assigned, unique per worker, never an IP/hostname."""
+
 
 # Singleton instance exported for use throughout the application
 settings = Settings()

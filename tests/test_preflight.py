@@ -193,16 +193,43 @@ def test_run_preflight_modes(db_session):
     mock_provider = MagicMock()
     mock_provider.__class__.__name__ = "MockMessageProvider"
 
-    res_std = run_preflight(db_session, strict=False, provider=mock_provider)
-    assert res_std.passed is True
-    assert res_std.exit_code == ExitCode.SUCCESS
-    assert len(res_std.checks) == 10
-    assert all(c.passed for c in res_std.checks)
+    with patch.object(settings, "WORKER_INSTANCE_ID", "oracle-arm64-worker-01"):
+        res_std = run_preflight(db_session, strict=False, provider=mock_provider)
+        assert res_std.passed is True
+        assert res_std.exit_code == ExitCode.SUCCESS
+        assert len(res_std.checks) == 11
+        assert all(c.passed for c in res_std.checks)
 
-    # Strict mode test with unauthenticated session elevating warning to critical
-    with patch("app.readiness.preflight.check_session_authentication") as mock_sess:
-        mock_sess.return_value = CheckResult("Session Authentication", False, "Unauthenticated", ExitCode.AUTHENTICATION_REQUIRED, critical=False)
-        res_strict = run_preflight(db_session, strict=True, provider=None)
-        # In strict mode, critical=True on failure so res_strict.passed should be False
-        assert res_strict.passed is False
-        assert res_strict.exit_code == ExitCode.AUTHENTICATION_REQUIRED
+        # Strict mode test with unauthenticated session elevating warning to critical
+        with patch("app.readiness.preflight.check_session_authentication") as mock_sess:
+            mock_sess.return_value = CheckResult("Session Authentication", False, "Unauthenticated", ExitCode.AUTHENTICATION_REQUIRED, critical=False)
+            res_strict = run_preflight(db_session, strict=True, provider=None)
+            # In strict mode, critical=True on failure so res_strict.passed should be False
+            assert res_strict.passed is False
+            assert res_strict.exit_code == ExitCode.AUTHENTICATION_REQUIRED
+
+
+def test_preflight_worker_instance_id_validation(db_session):
+    """Proves valid WORKER_INSTANCE_ID passes preflight, while invalid and empty fail."""
+    from app.readiness.preflight import check_worker_instance_id
+
+    # 1. Valid worker instance ID passes
+    with patch.object(settings, "WORKER_INSTANCE_ID", "oracle-arm64-worker-01"):
+        res_valid = check_worker_instance_id()
+        assert res_valid.passed is True
+        assert res_valid.exit_code == ExitCode.SUCCESS
+
+    # 2. Empty worker instance ID fails preflight
+    with patch.object(settings, "WORKER_INSTANCE_ID", ""):
+        res_empty = check_worker_instance_id()
+        assert res_empty.passed is False
+        assert res_empty.exit_code == ExitCode.INVALID_ARGUMENT
+        assert "not configured" in res_empty.message
+
+    # 3. Invalid format worker instance ID fails preflight
+    for invalid_id in ["Invalid_Worker", "w", "-bad-prefix", "bad-suffix-", "a" * 65]:
+        with patch.object(settings, "WORKER_INSTANCE_ID", invalid_id):
+            res_inv = check_worker_instance_id()
+            assert res_inv.passed is False
+            assert res_inv.exit_code == ExitCode.INVALID_ARGUMENT
+

@@ -22,6 +22,13 @@ All notable changes to this project are documented in this file.
   - Verified `PRODUCTION_BROWSER_READY: PASSED`.
   - Preserved benchmark profile (`/home/ubuntu/cft_poc/pairing_test_profile`) 100% untouched at 203 MB.
   - Zero WhatsApp messages dispatched, zero queue messages processed.
+- **Step 7 Control Plane ↔ Oracle Worker Handshake & PREFLIGHT Diagnostic Protocol**:
+  - Implemented configurable `WORKER_INSTANCE_ID` validated against `[a-z0-9-]` (3–64 chars), persisted to `system:worker_identity` AppSetting, and surfaced cleanly without leaking host IP or hostname.
+  - Extended worker daemon heartbeat loop writing every 15 seconds to `system:worker_heartbeat`, with live non-launching probes for Xvfb `:99`, Chrome binary reachability, ChromeDriver reachability, and session profile presence.
+  - Exposed five independent health dimensions in `WhatsAppWebService.get_status()`: infrastructure, browser, WhatsApp session, runner, and queue.
+  - Implemented `PREFLIGHT` diagnostic command callable via `POST /api/v1/whatsapp/preflight` (gated by `require_operator` and `verify_csrf`) with 120-second lease and strict safety invariants: **MUST NOT cold-start Chrome, MUST NOT start WhatsApp Web, MUST NOT send messages**.
+  - Exactly **0** database migrations required. Verified zero regressions against entire test suite.
+
 
 
 ## [Phase 7.7] - 2026-09-20 — APPROVED
