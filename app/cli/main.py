@@ -47,6 +47,11 @@ from app.cli.commands.runner import (
     handle_runner_status,
     handle_runner_stop,
 )
+from app.cli.commands.worker import (
+    handle_worker_start,
+    handle_worker_status,
+    handle_worker_stop,
+)
 from app.cli.commands.analytics import (
     handle_analytics_campaign,
     handle_analytics_queue,
@@ -113,6 +118,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     runner_sub.add_parser("status", help="Check active runner process PID and heartbeat")
     runner_sub.add_parser("stop", help="Signal active runner process to stop gracefully")
+
+    # 3b. Worker Daemon Subcommands (Always-on host daemon)
+    worker_parser = subparsers.add_parser("worker", help="Always-on Oracle worker control plane daemon lifecycle")
+    worker_sub = worker_parser.add_subparsers(dest="subcommand", help="Worker action")
+
+    w_start_p = worker_sub.add_parser("start", help="Start always-on worker control plane daemon")
+    w_start_p.add_argument("--poll-interval", type=int, default=None, help="Command polling interval in seconds")
+    w_start_p.add_argument("--heartbeat-interval", type=int, default=None, help="Heartbeat interval in seconds")
+    w_start_p.add_argument("--max-iterations", type=int, default=None, help="Bounded iteration limit (for testing)")
+
+    worker_sub.add_parser("status", help="Check active worker daemon process and heartbeat")
+    worker_sub.add_parser("stop", help="Signal active worker daemon to stop gracefully")
 
     # 4. Queue Subcommands
     queue_parser = subparsers.add_parser("queue", help="Queue inspection and manual reconciliation")
@@ -244,6 +261,19 @@ def main(args: Optional[List[str]] = None, db_session=None) -> int:
                 return int(handle_runner_status(parsed_args, db))
             elif sub == "stop":
                 return int(handle_runner_stop(parsed_args, db))
+            else:
+                parser.print_help()
+                return int(ExitCode.INVALID_ARGUMENT)
+
+        # Worker Routing
+        elif cmd == "worker":
+            sub = parsed_args.subcommand
+            if sub == "start":
+                return int(handle_worker_start(parsed_args, db))
+            elif sub == "status":
+                return int(handle_worker_status(parsed_args, db))
+            elif sub == "stop":
+                return int(handle_worker_stop(parsed_args, db))
             else:
                 parser.print_help()
                 return int(ExitCode.INVALID_ARGUMENT)

@@ -28,6 +28,14 @@ All notable changes to this project are documented in this file.
   - Exposed five independent health dimensions in `WhatsAppWebService.get_status()`: infrastructure, browser, WhatsApp session, runner, and queue.
   - Implemented `PREFLIGHT` diagnostic command callable via `POST /api/v1/whatsapp/preflight` (gated by `require_operator` and `verify_csrf`) with 120-second lease and strict safety invariants: **MUST NOT cold-start Chrome, MUST NOT start WhatsApp Web, MUST NOT send messages**.
   - Exactly **0** database migrations required. Verified zero regressions against entire test suite.
+- **Step 7 Worker Startup Architecture Correction (Decoupled WorkerDaemon)**:
+  - Decoupled always-on worker host lifecycle (`WorkerDaemon`) from campaign execution (`ProductionRunner`), eliminating systemd restart loops caused by campaigns in non-RUNNING states.
+  - Implemented `WorkerDaemon` in `app/runner/worker_daemon.py` responsible for worker identity publication, 15-second infrastructure heartbeats, 5-second command polling, safe PREFLIGHT execution, orphaned command recovery, and passive campaign supervision.
+  - Preserved strict campaign business validation: `WorkerDaemon` strictly never transitions campaigns from `DRAFT`/`PAUSED`/etc. to `RUNNING`; Campaign 1 remains in `DRAFT` state.
+  - Implemented decoupled process locking: `data/worker.lock` for worker daemon singularity and `data/runner.lock` for campaign runner execution.
+  - Added CLI commands: `outreach worker start`, `outreach worker status`, and `outreach worker stop`.
+  - Reconfigured systemd service `deploy/systemd/outreach-runner.service` to execute `outreach worker start` without `--campaign-id 1`.
+  - Zero database migrations required; zero dependencies added.
 
 
 

@@ -630,4 +630,21 @@ The system is strictly provider-agnostic. All browser and WhatsApp Web automatio
    - **Database Impact**: Exactly **0** database migrations required.
    - **Regression & Safety**: Zero regressions, production runner inactive, zero WhatsApp messages dispatched.
 
+7. **Step 7 Worker Startup Architecture Correction — Decoupled WorkerDaemon (IMPLEMENTED)**:
+   - **Decoupled Architecture**: Separated the always-on host worker daemon lifecycle (`WorkerDaemon`) from campaign execution (`ProductionRunner`). The host daemon stays alive even when no campaigns are running or when campaigns are in `DRAFT`/`PAUSED` status.
+   - **No Implicit Campaign Transitions**: `WorkerDaemon` never transitions campaigns from `DRAFT`, `PAUSED`, etc. to `RUNNING`. Campaign 1 remains strictly in `DRAFT`.
+   - **Preserved Campaign Validation**: `ProductionRunner` continues to validate campaign state and rejects `DRAFT` campaigns with `ExitCode.INVALID_STATE`.
+   - **Decoupled Process Locks**:
+     - Worker daemon lock: `data/worker.lock` enforces singleton daemon execution across the host.
+     - Campaign runner lock: `data/runner.lock` enforces single campaign execution across the host.
+     - Non-blocking locks allow metadata inspection by `status` commands without process collisions.
+   - **CLI Worker Subcommands**:
+     - `outreach worker start`: Starts the always-on worker daemon.
+     - `outreach worker status`: Inspects daemon lock, pid, and heartbeat freshness without interference.
+     - `outreach worker stop`: Sends graceful `SIGTERM` to the daemon process (zero `SIGKILL`, zero forceful kill of Chrome).
+   - **Systemd Service Unit**:
+     - `deploy/systemd/outreach-runner.service` updated with `ExecStart=/opt/whatsapp-outreach/app/.venv/bin/python -m app.cli.main worker start`.
+     - Completely removed `--campaign-id 1` from systemd configuration, eliminating restart loops.
+
+
 

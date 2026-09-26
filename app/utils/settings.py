@@ -116,6 +116,14 @@ class Settings(BaseSettings):
     """Stable human-readable worker instance label. Format: [a-z0-9-], 3–64 chars.
     Example: oracle-arm64-worker-01. Operator-assigned, unique per worker, never an IP/hostname."""
 
+    # Operational Worker Settings (Phase 7.7-B Step 7)
+    WORKER_LOCK_FILE: str = "./data/worker.lock"
+    """Filesystem path for production worker daemon authoritative OS process lockfile."""
+
+    WORKER_POLL_INTERVAL_SECONDS: int = 5
+    """Frequency of worker daemon polling for operational commands in seconds."""
+
 
 # Singleton instance exported for use throughout the application
 settings = Settings()
+

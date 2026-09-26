@@ -82,11 +82,11 @@ class ProcessLock:
         """Returns True if this instance currently holds the lock."""
         return self._locked
 
-    def acquire(self, worker_id: str, campaign_id: int) -> bool:
+    def acquire(self, worker_id: str, campaign_id: Optional[int] = None) -> bool:
         """
         Attempts to acquire the authoritative OS file lock.
         If an existing lock is held by a dead process, it is recovered.
-        Returns True if acquired, False if an active runner is already running.
+        Returns True if acquired, False if an active process is already running.
         """
         if self._locked:
             return True
@@ -119,7 +119,8 @@ class ProcessLock:
             self._file_handle.seek(0)
 
             if os.name == "nt":
-                # Non-blocking lock 1 byte on Windows
+                # Non-blocking lock 1 byte on Windows at offset 4096 (preserves readability of metadata at byte 0)
+                self._file_handle.seek(4096)
                 msvcrt.locking(self._file_handle.fileno(), msvcrt.LK_NBLCK, 1)
             else:
                 fcntl.flock(self._file_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -221,6 +222,7 @@ class ProcessLock:
                 self._file_handle.seek(0)
                 if os.name == "nt":
                     try:
+                        self._file_handle.seek(4096)
                         msvcrt.locking(self._file_handle.fileno(), msvcrt.LK_UNLCK, 1)
                     except Exception:
                         pass
@@ -296,3 +298,15 @@ class ProcessLock:
                 pass
 
         return None
+
+    def get_active_process_info(self) -> Optional[Dict[str, Any]]:
+        """
+        Returns process information if the process holding this lockfile is alive.
+        Checks the authoritative OS lock file only.
+        """
+        info = self.read_lock_file()
+        if info and info.get("pid"):
+            if is_pid_alive(info["pid"]):
+                return info
+        return None
+
