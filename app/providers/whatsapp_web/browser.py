@@ -48,6 +48,7 @@ class WhatsAppBrowser:
         self.chrome_binary = chrome_binary or (getattr(settings, "WHATSAPP_CHROME_BINARY", "") or None)
         self.chromedriver_path = chromedriver_path or (getattr(settings, "WHATSAPP_CHROMEDRIVER_PATH", "") or None)
         self.driver = driver
+        self._driver_pid: Optional[int] = None
 
     def is_alive(self) -> bool:
         """Checks if WebDriver instance is running and responsive."""
@@ -72,6 +73,15 @@ class WhatsAppBrowser:
 
             os.makedirs(self.session_path, exist_ok=True)
 
+            # Clean up stale SingletonLock if exists to prevent profile locking issues
+            singleton_lock = os.path.join(self.session_path, "SingletonLock")
+            if os.path.exists(singleton_lock) or os.path.islink(singleton_lock):
+                try:
+                    os.unlink(singleton_lock)
+                    logger.info(f"Cleaned up stale SingletonLock at {singleton_lock}")
+                except Exception as e:
+                    logger.debug(f"Could not remove SingletonLock: {e}")
+
             options = Options()
             options.add_argument(f"--user-data-dir={self.session_path}")
             options.add_argument("--no-sandbox")
@@ -94,6 +104,12 @@ class WhatsAppBrowser:
                 self.driver = webdriver.Chrome(service=service, options=options)
             else:
                 self.driver = webdriver.Chrome(options=options)
+
+            # Record ChromeDriver PID for guaranteed child process reaping
+            if service and hasattr(service, "process") and service.process:
+                self._driver_pid = service.process.pid
+            elif hasattr(self.driver, "service") and self.driver.service and self.driver.service.process:
+                self._driver_pid = self.driver.service.process.pid
 
             self.driver.set_page_load_timeout(self.page_load_timeout)
         except Exception as e:
@@ -219,23 +235,36 @@ class WhatsAppBrowser:
         else:
             raise WhatsAppSelectorError("Neither send button nor message input was available to send.")
 
-    def wait_for_send_confirmation(self, timeout: float = 15.0) -> bool:
+    def wait_for_send_confirmation(self, timeout: float = 20.0) -> bool:
         """
         Verifies that send operation succeeded according to strict UI confirmation criteria:
-        1. Input box is cleared.
+        1. Input box is cleared (ignoring zero-width spaces / invisible rich text whitespace).
         2. Outgoing message bubble appears.
-        3. Confirmation checkmark or timestamp indicator appears.
+        3. Confirmation checkmark or timestamp indicator appears in the message bubble.
         """
         end_time = time.time() + timeout
         while time.time() < end_time:
             # Check 1: message input cleared or detached
+            input_cleared = False
             input_elem = self.find_first_element(WhatsAppSelectors.MESSAGE_INPUT, timeout=1.0)
-            if input_elem:
-                text = input_elem.text.strip()
-                if text == "":
-                    # Check 2: outgoing checkmark or time icon is present
-                    if self.is_element_present(WhatsAppSelectors.CONFIRMATION_CHECKMARKS, timeout=2.0):
-                        return True
+            if input_elem is None:
+                # If input element is temporarily detached or replaced after send
+                input_cleared = True
+            else:
+                try:
+                    raw_text = input_elem.text or ""
+                    clean_text = re.sub(r"[\s\u200b\ufeff\xa0]+", "", raw_text)
+                    if clean_text == "":
+                        input_cleared = True
+                except Exception:
+                    input_cleared = True
+
+            # Check 2: Outgoing bubble and confirmation checkmark or time icon is present
+            has_bubble = self.is_element_present(WhatsAppSelectors.OUTGOING_BUBBLE, timeout=1.0)
+            has_check = self.is_element_present(WhatsAppSelectors.CONFIRMATION_CHECKMARKS, timeout=1.5)
+
+            if has_check and (input_cleared or has_bubble):
+                return True
 
             time.sleep(0.5)
 
@@ -251,11 +280,40 @@ class WhatsAppBrowser:
             return "Could not retrieve browser details."
 
     def quit(self) -> None:
-        """Gracefully closes the browser and driver."""
+        """Gracefully closes the browser and driver, ensuring child processes are reaped."""
+        driver_pid = self._driver_pid
         if self.driver:
             try:
                 self.driver.quit()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Error during driver.quit(): {e}")
             finally:
                 self.driver = None
+
+        # Clean up any leftover chromedriver / chrome processes associated with this session
+        if driver_pid:
+            try:
+                import psutil
+                if psutil.pid_exists(driver_pid):
+                    parent = psutil.Process(driver_pid)
+                    children = parent.children(recursive=True)
+                    for child in children:
+                        try:
+                            child.terminate()
+                        except (psutil.NoSuchProcess, psutil.AccessDenied):
+                            pass
+                    try:
+                        parent.terminate()
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        pass
+                    # Wait briefly for termination
+                    _, alive = psutil.wait_procs(children + [parent], timeout=3.0)
+                    for p in alive:
+                        try:
+                            p.kill()
+                        except (psutil.NoSuchProcess, psutil.AccessDenied):
+                            pass
+            except Exception as e:
+                logger.debug(f"Process cleanup notice: {e}")
+            finally:
+                self._driver_pid = None

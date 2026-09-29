@@ -128,6 +128,10 @@ class WorkerDaemon:
                 command_handler._publish_worker_heartbeat(runner_state="STANDBY")
             finally:
                 if should_close:
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
                     db.close()
 
             # 4. Main always-on daemon loop
@@ -167,6 +171,10 @@ class WorkerDaemon:
                     logger.error(f"Error during worker daemon tick: {e}", exc_info=True)
                 finally:
                     if should_close:
+                        try:
+                            db.rollback()
+                        except Exception:
+                            pass
                         db.close()
 
                 # Small interruptible sleep step
@@ -306,6 +314,10 @@ class WorkerDaemon:
                 pass
         finally:
             if should_close:
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
                 db.close()
 
     def _is_runner_active(self) -> bool:

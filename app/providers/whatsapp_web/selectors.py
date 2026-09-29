@@ -63,16 +63,29 @@ class WhatsAppSelectors:
     # 4. Delivery & Confirmation Indicators
     OUTGOING_BUBBLE: List[str] = [
         "div.message-out",
-        "div[data-testid='msg-container']:has(span[data-icon='tail-out'])",
         "div[data-testid='msg-container']",
+        "div[data-id*='true_']",
     ]
 
     CONFIRMATION_CHECKMARKS: List[str] = [
         "span[data-testid='msg-check']",
         "span[data-testid='msg-dblcheck']",
+        "span[data-testid='status-check']",
+        "span[data-testid='status-dblcheck']",
         "span[data-icon='msg-check']",
         "span[data-icon='msg-dblcheck']",
+        "span[data-icon='status-check']",
+        "span[data-icon='status-dblcheck']",
+        "span[data-icon='status-dblcheck-ack']",
+        "span[aria-label*='Sent']",
+        "span[aria-label*='Delivered']",
+        "span[aria-label*='Read']",
+        "span[aria-label*='تم إرسال']",
+        "span[aria-label*='تم تسليم']",
+        "span[aria-label*='تمت قراءة']",
         "span[data-testid='msg-time']",
+        "span[data-icon='msg-time']",
+        "span[data-testid='msg-meta']",
     ]
 
     # 5. Modals, Alerts, Banners

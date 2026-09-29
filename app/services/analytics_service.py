@@ -712,16 +712,31 @@ class AnalyticsService:
         distinguishing temporary failures, permanent failures, and ambiguous outcomes.
         """
         import os
+        import json
         from pathlib import Path
 
-        session_path = getattr(settings, "WHATSAPP_SESSION_PATH", "./data/whatsapp_session")
-        session_exists = os.path.exists(session_path) and os.path.isdir(session_path)
+        session_exists = False
         has_profile_data = False
-        if session_exists:
+
+        # First consult remote worker telemetry in AppSetting
+        is_remote = bool(os.environ.get("VERCEL")) or getattr(settings, "RUNNER_REMOTE_COORDINATION", False)
+        hb_row = db.query(AppSetting).filter(AppSetting.key == "system:worker_heartbeat").first()
+        if is_remote and hb_row and hb_row.value:
             try:
-                has_profile_data = any(Path(session_path).iterdir())
+                hb = json.loads(hb_row.value)
+                session_exists = hb.get("session_profile_present", False)
+                has_profile_data = session_exists
             except Exception:
                 pass
+
+        if not session_exists:
+            session_path = getattr(settings, "WHATSAPP_SESSION_PATH", "./data/whatsapp_session")
+            session_exists = os.path.exists(session_path) and os.path.isdir(session_path)
+            if session_exists:
+                try:
+                    has_profile_data = any(Path(session_path).iterdir())
+                except Exception:
+                    pass
 
         # Total attempts, confirmed sends, failures, unknown outcomes
         total_attempts = db.query(func.count(Message.id)).filter(Message.attempt_count > 0).scalar() or 0

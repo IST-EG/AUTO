@@ -296,3 +296,92 @@ def test_start_runner_stale_lock_recovery(web_session):
         assert success is True
         assert data["pid"] == 22222
         mock_release.assert_called_once()
+
+
+def test_start_runner_emergency_stop_active(web_session):
+    """Fails when emergency stop is active."""
+    from app.scheduler.emergency_stop import EmergencyStop
+    e_stop = EmergencyStop(db=web_session)
+    e_stop.trigger(reason="Test Killswitch Active")
+
+    camp = Campaign(
+        name="Blocked Camp",
+        message_template="Hello",
+        status="RUNNING",
+    )
+    web_session.add(camp)
+    web_session.commit()
+
+    success, message, data = RunnerControlService.start_runner(
+        db=web_session,
+        campaign_id=camp.id,
+        operator_username="operator_bob"
+    )
+    assert success is False
+    assert "Emergency stop is currently ACTIVE" in message
+    assert data is None
+
+
+def test_start_runner_remote_worker_heartbeat_stale(web_session):
+    """Fails in remote mode when worker heartbeat is stale (>120s)."""
+    import json
+    from app.models.app_setting import AppSetting
+    from app.utils.settings import settings
+
+    camp = Campaign(
+        name="Stale Worker Camp",
+        message_template="Hello",
+        status="RUNNING",
+    )
+    web_session.add(camp)
+
+    stale_time = (datetime.now(timezone.utc) - timedelta(seconds=200)).isoformat()
+    hb = AppSetting(
+        key="system:worker_heartbeat",
+        value=json.dumps({"timestamp": stale_time, "worker_id": "test-worker", "infra_health": "HEALTHY"})
+    )
+    web_session.add(hb)
+    web_session.commit()
+
+    with patch.object(settings, "RUNNER_REMOTE_COORDINATION", True):
+        success, message, data = RunnerControlService.start_runner(
+            db=web_session,
+            campaign_id=camp.id,
+            operator_username="operator_bob"
+        )
+        assert success is False
+        assert "Remote worker daemon heartbeat is stale" in message
+        assert data is None
+
+
+def test_start_runner_remote_worker_heartbeat_fresh(web_session):
+    """Succeeds in remote mode when worker heartbeat is fresh (<120s)."""
+    import json
+    from app.models.app_setting import AppSetting
+    from app.utils.settings import settings
+
+    camp = Campaign(
+        name="Fresh Worker Camp",
+        message_template="Hello",
+        status="RUNNING",
+    )
+    web_session.add(camp)
+
+    fresh_time = datetime.now(timezone.utc).isoformat()
+    hb = AppSetting(
+        key="system:worker_heartbeat",
+        value=json.dumps({"timestamp": fresh_time, "worker_id": "test-worker", "infra_health": "HEALTHY"})
+    )
+    web_session.add(hb)
+    web_session.commit()
+
+    with patch.object(settings, "RUNNER_REMOTE_COORDINATION", True):
+        success, message, data = RunnerControlService.start_runner(
+            db=web_session,
+            campaign_id=camp.id,
+            operator_username="operator_bob"
+        )
+        assert success is True
+        assert data["desired_state"] == "RUNNING"
+        assert data["pid"] is None
+

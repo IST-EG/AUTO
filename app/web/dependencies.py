@@ -20,12 +20,17 @@ from app.web.security.csrf import csrf_manager
 def get_db() -> Generator[Session, None, None]:
     """
     FastAPI dependency yielding a SQLAlchemy database session.
-    Automatically closes session after request handling.
+    Automatically rolls back and closes session after request handling
+    to guarantee zero idle-in-transaction leaks across poolers (Supavisor).
     """
     db = SessionLocal()
     try:
         yield db
     finally:
+        try:
+            db.rollback()
+        except Exception:
+            pass
         db.close()
 
 

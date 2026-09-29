@@ -49,103 +49,17 @@ class WhatsAppWebService:
         runner_worker_id = runner_status.get("worker_id")
         runner_campaign_id = runner_status.get("campaign_id")
 
-        # 2. Storage inspection (sanitized, zero path exposure)
-        session_path_str = getattr(settings, "WHATSAPP_SESSION_PATH", "./data/whatsapp_session")
-        session_path = Path(session_path_str)
-        profile_exists = session_path.exists() and session_path.is_dir()
-        has_profile_data = False
-        profile_size_bytes = 0
-        profile_writable = True
-
-        if profile_exists:
-            try:
-                children = list(session_path.iterdir())
-                has_profile_data = len(children) > 0
-                if has_profile_data:
-                    for f in session_path.glob("**/*"):
-                        if f.is_file():
-                            try:
-                                profile_size_bytes += f.stat().st_size
-                            except Exception:
-                                pass
-            except Exception as e:
-                logger.debug(f"Error inspecting session directory: {e}")
-
-        # Test write permissions without leaking path
-        try:
-            test_file = session_path / ".perm_check_tmp"
-            test_file.write_text("ok", encoding="utf-8")
-            test_file.unlink()
-        except Exception:
-            profile_writable = False
-
-        if not profile_exists:
-            storage_state = "MISSING"
-        elif not has_profile_data:
-            storage_state = "EMPTY"
-        else:
-            storage_state = "PRESENT"
-
-        # 3. Read live telemetry from worker
-        telemetry_row = db.query(AppSetting).filter(AppSetting.key == cls.TELEMETRY_SETTING_KEY).first()
-        telemetry: Dict[str, Any] = {}
-        if telemetry_row and telemetry_row.value:
-            try:
-                telemetry = json.loads(telemetry_row.value)
-            except Exception:
-                pass
-
-        # 4. Resolve session state
-        # If runner is active, use live telemetry state; otherwise DISCONNECTED
-        if is_runner_active:
-            state = telemetry.get("state", "AUTHENTICATING" if storage_state == "EMPTY" else "CONNECTED")
-        else:
-            state = "DISCONNECTED"
-
-        # 5. Resolve health state
-        health_state = "HEALTHY"
-        if state in ("ERROR", "SESSION_LOST"):
-            health_state = "UNHEALTHY"
-        elif state == "AUTHENTICATING" or storage_state != "PRESENT":
-            health_state = "DEGRADED"
-        elif not is_runner_active:
-            health_state = "STOPPED"
-
-        # 6. Health check age
-        last_health_str = telemetry.get("last_health_check")
-        health_age: Optional[float] = None
-        if last_health_str:
-            try:
-                lh_dt = datetime.fromisoformat(last_health_str.replace("Z", "+00:00"))
-                health_age = max(0.0, (now_utc - lh_dt).total_seconds())
-            except Exception:
-                pass
-
-        # 7. Commands inspection
-        # Auto-recover orphaned command if needed
-        WhatsAppCommandService.recover_stale_or_orphaned_command(db)
-        active_cmd = WhatsAppCommandService.get_active_command(db)
-        last_cmd = WhatsAppCommandService.get_last_completed_command(db)
-
-        # 8. Diagnostic snippet (sanitized)
-        raw_snippet = telemetry.get("diagnostic_snippet", "")
-        sanitized_snippet = raw_snippet if raw_snippet else None
-
-        # 9. Phase 7.7-B Step 7: Worker identity, heartbeat, and infra health dimensions
-
-        # Read worker identity
+        # 2. Worker Identity and Infrastructure Heartbeat (Authoritative source for Worker host)
         identity_row = db.query(AppSetting).filter(AppSetting.key == cls.IDENTITY_SETTING_KEY).first()
         worker_identity: Optional[Dict[str, Any]] = None
         if identity_row and identity_row.value:
             try:
                 worker_identity = json.loads(identity_row.value)
-                # Strip any accidental credential fields (defense in depth)
                 for _unsafe_key in ("database_url", "password", "secret", "token", "api_key", "ssh_key"):
                     worker_identity.pop(_unsafe_key, None)
             except Exception:
                 pass
 
-        # Read worker heartbeat
         heartbeat_row = db.query(AppSetting).filter(AppSetting.key == cls.HEARTBEAT_SETTING_KEY).first()
         worker_heartbeat: Optional[Dict[str, Any]] = None
         heartbeat_age: Optional[float] = None
@@ -157,8 +71,6 @@ class WhatsAppWebService:
                 if last_seen_str:
                     hb_dt = datetime.fromisoformat(last_seen_str.replace("Z", "+00:00"))
                     raw_diff = (now_utc - hb_dt).total_seconds()
-                    # Absorb minor NTP/network tolerance for tiny negative deltas [-1.0s, 0s).
-                    # Substantial future timestamp (< -1.0s) is retained as-is to signal clock skew.
                     if raw_diff < -1.0:
                         heartbeat_age = raw_diff
                     else:
@@ -170,7 +82,6 @@ class WhatsAppWebService:
         if worker_heartbeat is None:
             infra_health = WorkerInfraHealthEnum.UNKNOWN
         elif raw_diff is not None and raw_diff < -1.0:
-            # Heartbeat timestamp is in the future (>1.0s): clock skew detected -> DEGRADED
             infra_health = WorkerInfraHealthEnum.DEGRADED
         elif heartbeat_age is not None and heartbeat_age >= 60:
             infra_health = WorkerInfraHealthEnum.OFFLINE
@@ -190,10 +101,109 @@ class WhatsAppWebService:
             worker_heartbeat["heartbeat_age_seconds"] = round(heartbeat_age, 1)
             worker_heartbeat["infra_health"] = infra_health.value
 
+        # 3. Storage inspection (Worker telemetry authoritative, local fallback only if no worker)
+        has_remote_worker = worker_heartbeat is not None
+        is_worker_online = (infra_health in (WorkerInfraHealthEnum.HEALTHY, WorkerInfraHealthEnum.DEGRADED))
+
+        profile_size_bytes = 0
+        if has_remote_worker:
+            if is_worker_online:
+                profile_exists = bool(worker_heartbeat.get("session_profile_present", False))
+                storage_state = "PRESENT" if profile_exists else "MISSING"
+                profile_writable = profile_exists
+            else:
+                profile_exists = False
+                storage_state = "UNKNOWN"
+                profile_writable = False
+        else:
+            # Fallback for standalone local development without WorkerDaemon
+            session_path_str = getattr(settings, "WHATSAPP_SESSION_PATH", "./data/whatsapp_session")
+            profile_exists = os.path.exists(session_path_str) and os.path.isdir(session_path_str)
+            session_path = Path(session_path_str)
+            has_profile_data = False
+            if profile_exists:
+                try:
+                    children = list(session_path.iterdir())
+                    has_profile_data = len(children) > 0
+                    if has_profile_data:
+                        for f in session_path.glob("**/*"):
+                            if f.is_file():
+                                try:
+                                    profile_size_bytes += f.stat().st_size
+                                except Exception:
+                                    pass
+                except Exception as e:
+                    logger.debug(f"Error inspecting session directory: {e}")
+
+            try:
+                test_file = session_path / ".perm_check_tmp"
+                test_file.write_text("ok", encoding="utf-8")
+                test_file.unlink()
+                profile_writable = True
+            except Exception:
+                profile_writable = False
+
+            if not profile_exists:
+                storage_state = "MISSING"
+            elif not has_profile_data:
+                storage_state = "EMPTY"
+            else:
+                storage_state = "PRESENT"
+
+        # 4. Read live telemetry from worker
+        telemetry_row = db.query(AppSetting).filter(AppSetting.key == cls.TELEMETRY_SETTING_KEY).first()
+        telemetry: Dict[str, Any] = {}
+        if telemetry_row and telemetry_row.value:
+            try:
+                telemetry = json.loads(telemetry_row.value)
+            except Exception:
+                pass
+
+        # 5. Resolve session state
+        # If runner is active, use live telemetry state; otherwise DISCONNECTED
+        if is_runner_active:
+            state = telemetry.get("state", "AUTHENTICATING" if storage_state == "EMPTY" else "CONNECTED")
+        else:
+            state = "DISCONNECTED"
+
+        # 6. Resolve health state
+        health_state = "HEALTHY"
+        if state in ("ERROR", "SESSION_LOST"):
+            health_state = "UNHEALTHY"
+        elif state == "AUTHENTICATING" or storage_state not in ("PRESENT",):
+            health_state = "DEGRADED"
+        elif not is_runner_active:
+            health_state = "STANDBY" if is_worker_online else "STOPPED"
+
+        # 7. Health check age & provider telemetry freshness
+        last_health_str = telemetry.get("last_health_check")
+        health_age: Optional[float] = None
+        if last_health_str:
+            try:
+                lh_dt = datetime.fromisoformat(last_health_str.replace("Z", "+00:00"))
+                health_age = max(0.0, (now_utc - lh_dt).total_seconds())
+            except Exception:
+                pass
+
+        # Enrich heartbeat dict with computed age
+        if worker_heartbeat is not None and heartbeat_age is not None:
+            worker_heartbeat = dict(worker_heartbeat)
+            worker_heartbeat["heartbeat_age_seconds"] = round(heartbeat_age, 1)
+            worker_heartbeat["infra_health"] = infra_health.value
+
         # Dimension 3: session authentication inference
         session_state_str = telemetry.get("state", "DISCONNECTED") if is_runner_active else "DISCONNECTED"
         session_authenticated = session_state_str in ("CONNECTED",)
         qr_required = session_state_str in ("AUTHENTICATING",) or storage_state == "EMPTY"
+
+        # Commands inspection
+        WhatsAppCommandService.recover_stale_or_orphaned_command(db)
+        active_cmd = WhatsAppCommandService.get_active_command(db)
+        last_cmd = WhatsAppCommandService.get_last_completed_command(db)
+
+        # Diagnostic snippet (sanitized)
+        raw_snippet = telemetry.get("diagnostic_snippet", "")
+        sanitized_snippet = raw_snippet if raw_snippet else None
 
         # Read last preflight result
         preflight_row = db.query(AppSetting).filter(AppSetting.key == cls.PREFLIGHT_RESULT_KEY).first()
@@ -250,82 +260,191 @@ class WhatsAppWebService:
         overall_ready = True
         recommendations: List[str] = []
 
-        # 1. Chrome Executable Environment
-        chrome_found = False
-        chrome_version: Optional[str] = None
-        try:
-            import shutil
-            found = shutil.which("google-chrome") or shutil.which("chrome") or shutil.which("chromium")
-            if found:
-                chrome_found = True
-            elif os.name == "nt":
-                candidates = [
-                    r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-                    r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
-                    os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
-                ]
-                for c in candidates:
-                    if os.path.exists(c):
-                        chrome_found = True
-                        break
-            if getattr(settings, "WHATSAPP_CHROME_BINARY", "") and os.path.exists(settings.WHATSAPP_CHROME_BINARY):
-                chrome_found = True
-        except Exception:
-            pass
+        # Read worker identity and heartbeat from database
+        identity_row = db.query(AppSetting).filter(AppSetting.key == cls.IDENTITY_SETTING_KEY).first()
+        worker_identity: Optional[Dict[str, Any]] = None
+        if identity_row and identity_row.value:
+            try:
+                worker_identity = json.loads(identity_row.value)
+            except Exception:
+                pass
 
-        if chrome_found:
-            checks.append({
-                "name": "Google Chrome Environment",
-                "passed": True,
-                "message": "Google Chrome executable is discoverable on Worker host",
-                "details": {
-                    "chrome_available": True,
-                    "chrome_version": "Detected",
-                }
-            })
+        heartbeat_row = db.query(AppSetting).filter(AppSetting.key == cls.HEARTBEAT_SETTING_KEY).first()
+        worker_heartbeat: Optional[Dict[str, Any]] = None
+        heartbeat_age: Optional[float] = None
+        if heartbeat_row and heartbeat_row.value:
+            try:
+                worker_heartbeat = json.loads(heartbeat_row.value)
+                last_seen_str = worker_heartbeat.get("last_seen")
+                if last_seen_str:
+                    hb_dt = datetime.fromisoformat(last_seen_str.replace("Z", "+00:00"))
+                    heartbeat_age = max(0.0, (datetime.now(timezone.utc) - hb_dt).total_seconds())
+            except Exception:
+                pass
+
+        has_remote_worker = worker_heartbeat is not None
+        is_worker_online = (has_remote_worker and heartbeat_age is not None and heartbeat_age < 60)
+
+        # 1. Chrome Executable Environment
+        if has_remote_worker:
+            if is_worker_online:
+                chrome_reachable = bool(worker_heartbeat.get("chrome_reachable", False))
+                chrome_version = worker_identity.get("chrome_version", "Google Chrome for Testing") if worker_identity else "Detected on Worker host"
+                if chrome_reachable:
+                    checks.append({
+                        "name": "Google Chrome Environment",
+                        "passed": True,
+                        "message": f"Google Chrome is verified on Worker host ({chrome_version})",
+                        "details": {
+                            "chrome_available": True,
+                            "chrome_version": chrome_version,
+                            "worker_id": worker_heartbeat.get("worker_id"),
+                        }
+                    })
+                else:
+                    overall_ready = False
+                    checks.append({
+                        "name": "Google Chrome Environment",
+                        "passed": False,
+                        "message": "Google Chrome executable not responding on Worker host",
+                        "details": {
+                            "chrome_available": False,
+                            "worker_id": worker_heartbeat.get("worker_id"),
+                        }
+                    })
+                    recommendations.append("Check Google Chrome installation on Worker host.")
+            else:
+                overall_ready = False
+                checks.append({
+                    "name": "Google Chrome Environment",
+                    "passed": False,
+                    "message": f"Worker host is OFFLINE (last heartbeat {round(heartbeat_age, 1) if heartbeat_age else 'N/A'}s ago) — cannot verify Chrome",
+                    "details": {
+                        "chrome_available": False,
+                        "worker_offline": True,
+                    }
+                })
+                recommendations.append("Verify outreach-runner.service on Worker host.")
         else:
-            overall_ready = False
-            checks.append({
-                "name": "Google Chrome Environment",
-                "passed": False,
-                "message": "Google Chrome executable not found on Worker host",
-                "details": {
-                    "chrome_available": False,
-                }
-            })
-            recommendations.append("Install Google Chrome on Worker VPS or configure WHATSAPP_CHROME_BINARY.")
+            # Standalone local development fallback
+            chrome_found = False
+            chrome_version = None
+            try:
+                import shutil
+                found = shutil.which("google-chrome") or shutil.which("chrome") or shutil.which("chromium")
+                if found:
+                    chrome_found = True
+                elif os.name == "nt":
+                    candidates = [
+                        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+                        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+                        os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
+                    ]
+                    for c in candidates:
+                        if os.path.exists(c):
+                            chrome_found = True
+                            break
+                if getattr(settings, "WHATSAPP_CHROME_BINARY", "") and os.path.exists(settings.WHATSAPP_CHROME_BINARY):
+                    chrome_found = True
+            except Exception:
+                pass
+
+            if chrome_found:
+                checks.append({
+                    "name": "Google Chrome Environment",
+                    "passed": True,
+                    "message": "Google Chrome executable is discoverable on local host",
+                    "details": {
+                        "chrome_available": True,
+                        "chrome_version": "Detected",
+                    }
+                })
+            else:
+                overall_ready = False
+                checks.append({
+                    "name": "Google Chrome Environment",
+                    "passed": False,
+                    "message": "Google Chrome executable not found on local host",
+                    "details": {
+                        "chrome_available": False,
+                    }
+                })
+                recommendations.append("Install Google Chrome on Worker VPS or configure WHATSAPP_CHROME_BINARY.")
 
         # 2. Session Profile Storage
-        session_path = Path(getattr(settings, "WHATSAPP_SESSION_PATH", "./data/whatsapp_session"))
-        profile_exists = session_path.exists() and session_path.is_dir()
-        has_data = any(session_path.iterdir()) if profile_exists else False
-
-        storage_state = "PRESENT" if has_data else ("EMPTY" if profile_exists else "MISSING")
-        storage_passed = has_data
-
-        if storage_passed:
-            checks.append({
-                "name": "Persistent Profile Storage",
-                "passed": True,
-                "message": "Persistent WhatsApp Web session credentials verified",
-                "details": {
-                    "profile_present": True,
-                    "profile_storage_state": storage_state,
-                    "profile_writable": True,
-                }
-            })
+        if has_remote_worker:
+            if is_worker_online:
+                profile_present = bool(worker_heartbeat.get("session_profile_present", False))
+                storage_state = "PRESENT" if profile_present else "MISSING"
+                if profile_present:
+                    checks.append({
+                        "name": "Persistent Profile Storage",
+                        "passed": True,
+                        "message": "Persistent WhatsApp Web session credentials verified on Worker host",
+                        "details": {
+                            "profile_present": True,
+                            "profile_storage_state": storage_state,
+                            "profile_writable": True,
+                        }
+                    })
+                else:
+                    overall_ready = False
+                    checks.append({
+                        "name": "Persistent Profile Storage",
+                        "passed": False,
+                        "message": "Session credentials require authentication via QR code scan on Worker host",
+                        "details": {
+                            "profile_present": False,
+                            "profile_storage_state": storage_state,
+                            "profile_writable": True,
+                        }
+                    })
+                    recommendations.append("Run 'outreach session login' on the Worker host to scan the WhatsApp QR code.")
+            else:
+                overall_ready = False
+                checks.append({
+                    "name": "Persistent Profile Storage",
+                    "passed": False,
+                    "message": "Worker host is OFFLINE — cannot verify session profile",
+                    "details": {
+                        "profile_present": False,
+                        "profile_storage_state": "UNKNOWN",
+                        "worker_offline": True,
+                    }
+                })
+                recommendations.append("Verify outreach-runner.service on Worker host.")
         else:
-            checks.append({
-                "name": "Persistent Profile Storage",
-                "passed": False,
-                "message": "Session credentials require authentication via QR code scan",
-                "details": {
-                    "profile_present": profile_exists,
-                    "profile_storage_state": storage_state,
-                    "profile_writable": True,
-                }
-            })
-            recommendations.append("Run 'outreach session login' on the Worker host to scan the WhatsApp QR code.")
+            # Standalone local development fallback
+            session_path = Path(getattr(settings, "WHATSAPP_SESSION_PATH", "./data/whatsapp_session"))
+            profile_exists = session_path.exists() and session_path.is_dir()
+            has_data = any(session_path.iterdir()) if profile_exists else False
+
+            storage_state = "PRESENT" if has_data else ("EMPTY" if profile_exists else "MISSING")
+            storage_passed = has_data
+
+            if storage_passed:
+                checks.append({
+                    "name": "Persistent Profile Storage",
+                    "passed": True,
+                    "message": "Persistent WhatsApp Web session credentials verified",
+                    "details": {
+                        "profile_present": True,
+                        "profile_storage_state": storage_state,
+                        "profile_writable": True,
+                    }
+                })
+            else:
+                checks.append({
+                    "name": "Persistent Profile Storage",
+                    "passed": False,
+                    "message": "Session credentials require authentication via QR code scan",
+                    "details": {
+                        "profile_present": profile_exists,
+                        "profile_storage_state": storage_state,
+                        "profile_writable": True,
+                    }
+                })
+                recommendations.append("Run 'outreach session login' on the Worker host to scan the WhatsApp QR code.")
 
         # 3. Process Lock Singularity
         runner_status = RunnerControlService.get_status(db)

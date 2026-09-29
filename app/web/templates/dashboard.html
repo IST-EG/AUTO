@@ -284,27 +284,31 @@
         <div style="background: var(--ids-canvas); border: 1px solid var(--ids-border); border-radius: var(--radius-sm); padding: var(--space-4); margin-bottom: var(--space-4); font-size: 12px; line-height: 1.6;">
           <div style="display: flex; justify-content: space-between; padding-bottom: 6px; border-bottom: 1px solid var(--ids-border-subtle);">
             <span style="color: var(--ids-text-muted);">Desired Runner State:</span>
-            <strong id="ctrl-runner-state" style="color: var(--ids-text-primary);">{{ snapshot.runner.state }}</strong>
+            <strong id="ctrl-runner-desired-state" style="color: var(--ids-text-primary);">{{ snapshot.runner.desired_state or 'STOPPED' }}</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--ids-border-subtle);">
+            <span style="color: var(--ids-text-muted);">Runner Process:</span>
+            <span id="ctrl-runner-state" class="status-pill status-{{ snapshot.runner.state|lower }}">{{ snapshot.runner.state }}</span>
           </div>
           <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--ids-border-subtle);">
             <span style="color: var(--ids-text-muted);">Target Campaign:</span>
-            <span id="ctrl-runner-campaign" style="font-family: var(--font-mono); color: var(--ids-text-secondary);">{% if snapshot.runner.campaign_id %}#{{ snapshot.runner.campaign_id }}{% else %}None{% endif %}</span>
+            <span id="ctrl-runner-campaign" style="font-family: var(--font-mono); color: var(--ids-text-secondary);">{% if snapshot.runner.campaign_id %}#{{ snapshot.runner.campaign_id }}{% elif snapshot.runner.desired_campaign_id %}#{{ snapshot.runner.desired_campaign_id }}{% else %}None{% endif %}</span>
           </div>
           <div style="display: flex; justify-content: space-between; padding-top: 6px;">
-            <span style="color: var(--ids-text-muted);">Remote Worker Heartbeat:</span>
-            <span id="ctrl-runner-heartbeat" style="color: var(--ids-text-secondary);">
-              {% if snapshot.runner.heartbeat_age_seconds is not none %}{{ snapshot.runner.heartbeat_age_seconds }}s ago{% else %}Offline{% endif %}
+            <span style="color: var(--ids-text-muted);">Worker Daemon:</span>
+            <span id="ctrl-worker-daemon-heartbeat" style="color: var(--ids-text-secondary);">
+              {% if snapshot.runner.worker_daemon_heartbeat_age is not none %}{{ snapshot.runner.worker_daemon_heartbeat_age }}s ago ({{ snapshot.runner.worker_daemon_health }}){% else %}Offline{% endif %}
             </span>
           </div>
         </div>
 
         <div style="display: flex; gap: var(--space-3);">
           <button id="btn-start-runner" class="btn btn-primary" style="flex: 1;"
-            {% if snapshot.runner.state == 'RUNNING' or current_user.role == 'VIEWER' %}disabled{% endif %}>
+            {% if snapshot.runner.desired_state == 'RUNNING' or snapshot.runner.state == 'RUNNING' or current_user.role == 'VIEWER' %}disabled{% endif %}>
             Start Runner
           </button>
           <button id="btn-stop-runner" class="btn btn-secondary" style="flex: 1;"
-            {% if snapshot.runner.state != 'RUNNING' or current_user.role == 'VIEWER' %}disabled{% endif %}>
+            {% if snapshot.runner.desired_state != 'RUNNING' and snapshot.runner.state != 'RUNNING' or current_user.role == 'VIEWER' %}disabled{% endif %}>
             Stop Runner
           </button>
         </div>

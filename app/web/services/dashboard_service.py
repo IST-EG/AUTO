@@ -22,6 +22,7 @@ from app.services.analytics_service import AnalyticsService
 from app.readiness.health import evaluate_system_health, HealthState
 from app.scheduler.emergency_stop import EmergencyStop
 from app.web.services.runner_control_service import RunnerControlService
+from app.web.services.whatsapp_service import WhatsAppWebService
 from app.utils.settings import settings
 from app.utils.logger import get_logger
 
@@ -97,27 +98,22 @@ class DashboardService:
             "activated_at": e_stop_activated_at,
         }
 
-        # 4. WhatsApp Provider & Session Status
-        session_path = getattr(settings, "WHATSAPP_SESSION_PATH", "./data/whatsapp_session")
-        profile_exists = os.path.exists(session_path) and os.path.isdir(session_path)
-        has_profile_data = False
-        if profile_exists:
-            try:
-                has_profile_data = any(Path(session_path).iterdir())
-            except Exception:
-                pass
-
-        # Determine session state
-        whatsapp_state = "DISCONNECTED"
-        if not profile_exists:
-            whatsapp_state = "DISCONNECTED"
-        elif has_profile_data:
-            whatsapp_state = "CONNECTED" if health_dto["state"] == "HEALTHY" else "AUTHENTICATING"
+        # 4. WhatsApp Provider & Session Status (from authoritative WhatsAppWebService)
+        whatsapp_status = WhatsAppWebService.get_status(db) if db_connected else {}
+        profile_exists = whatsapp_status.get("profile_present", False)
+        storage_state = whatsapp_status.get("profile_storage_state", "MISSING")
+        has_profile_data = (storage_state == "PRESENT")
+        whatsapp_state = whatsapp_status.get("state", "DISCONNECTED")
+        infra_health = whatsapp_status.get("infra_health", "UNKNOWN")
+        worker_hb = whatsapp_status.get("worker_heartbeat")
 
         whatsapp_dto = {
             "state": whatsapp_state,
             "profile_exists": profile_exists,
             "has_profile_data": has_profile_data,
+            "storage_state": storage_state,
+            "infra_health": infra_health,
+            "worker_heartbeat": worker_hb,
             "disclaimer": "SEND_CONFIRMED represents WhatsApp Web UI send confirmation only, not delivery or read receipts.",
         }
 
@@ -155,6 +151,9 @@ class DashboardService:
             "is_stale": False,
             "dispatches_completed": 0,
             "lock_authoritative": True,
+            "worker_daemon_health": infra_health,
+            "worker_daemon_heartbeat_age": worker_hb.get("heartbeat_age_seconds") if worker_hb else None,
+            "worker_id_name": (worker_hb.get("worker_id") if worker_hb else None) or "oracle-arm64-worker-01",
         }
         if db_connected:
             try:
@@ -162,6 +161,10 @@ class DashboardService:
                 runner_analytics = AnalyticsService.get_runner_analytics(db)
                 runner_dto.update(runner_status)
                 runner_dto["dispatches_completed"] = runner_analytics.get("dispatches_completed", 0)
+                # Ensure remote worker telemetry is preserved
+                runner_dto["worker_daemon_health"] = infra_health
+                runner_dto["worker_daemon_heartbeat_age"] = worker_hb.get("heartbeat_age_seconds") if worker_hb else None
+                runner_dto["worker_id_name"] = (worker_hb.get("worker_id") if worker_hb else None) or runner_dto.get("worker_id") or "oracle-arm64-worker-01"
             except Exception as e:
                 logger.warning(f"Error checking runner status: {e}")
 
@@ -391,13 +394,22 @@ class DashboardService:
                 "timestamp": now_iso,
             })
 
-        # WhatsApp Session Profile Alert
-        if not whatsapp_dto.get("profile_exists"):
+        # Worker Daemon & WhatsApp Session Profile Alerts
+        infra_health = whatsapp_dto.get("infra_health", "UNKNOWN")
+        if infra_health == "OFFLINE":
+            alerts.append({
+                "id": "ALERT_WORKER_OFFLINE",
+                "severity": "HIGH",
+                "title": "Remote Worker Daemon Offline",
+                "message": "No heartbeat received from the Oracle worker daemon within the expected threshold.",
+                "timestamp": now_iso,
+            })
+        elif not whatsapp_dto.get("profile_exists"):
             alerts.append({
                 "id": "ALERT_WHATSAPP_PROFILE_MISSING",
                 "severity": "MEDIUM",
                 "title": "WhatsApp Session Profile Not Configured",
-                "message": "No persistent browser profile directory was found. Initial login required.",
+                "message": "No persistent browser profile directory was found on the active worker. Initial login required.",
                 "timestamp": now_iso,
             })
 

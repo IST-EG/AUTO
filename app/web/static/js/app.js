@@ -219,24 +219,32 @@ function updateDashboard(data) {
     }
 
     const ctrlState = document.getElementById('ctrl-runner-state');
-    if (ctrlState) ctrlState.textContent = data.runner.state;
+    if (ctrlState) {
+      ctrlState.textContent = data.runner.state;
+      ctrlState.className = `status-pill status-${(data.runner.state || '').toLowerCase()}`;
+    }
+    const ctrlDesired = document.getElementById('ctrl-runner-desired-state');
+    if (ctrlDesired) ctrlDesired.textContent = data.runner.desired_state || 'STOPPED';
     const ctrlCamp = document.getElementById('ctrl-runner-campaign');
-    if (ctrlCamp) ctrlCamp.textContent = data.runner.campaign_id ? `#${data.runner.campaign_id}` : 'None';
-    const ctrlHb = document.getElementById('ctrl-runner-heartbeat');
-    if (ctrlHb) {
-      ctrlHb.textContent = data.runner.heartbeat_age_seconds !== null && data.runner.heartbeat_age_seconds !== undefined
-        ? `${data.runner.heartbeat_age_seconds}s ago`
-        : 'Offline';
+    if (ctrlCamp) ctrlCamp.textContent = data.runner.campaign_id ? `#${data.runner.campaign_id}` : (data.runner.desired_campaign_id ? `#${data.runner.desired_campaign_id}` : 'None');
+    const ctrlWorkerHb = document.getElementById('ctrl-worker-daemon-heartbeat');
+    if (ctrlWorkerHb) {
+      if (data.runner.worker_daemon_heartbeat_age !== null && data.runner.worker_daemon_heartbeat_age !== undefined) {
+        ctrlWorkerHb.textContent = `${data.runner.worker_daemon_heartbeat_age}s ago (${data.runner.worker_daemon_health || 'HEALTHY'})`;
+      } else {
+        ctrlWorkerHb.textContent = 'Offline';
+      }
     }
 
     const role = window.CURRENT_USER_ROLE || '';
+    const isRunning = (data.runner.state === 'RUNNING' || data.runner.desired_state === 'RUNNING');
     const btnStart = document.getElementById('btn-start-runner');
     if (btnStart) {
-      btnStart.disabled = data.runner.state === 'RUNNING' || role === 'VIEWER';
+      btnStart.disabled = isRunning || role === 'VIEWER';
     }
     const btnStop = document.getElementById('btn-stop-runner');
     if (btnStop) {
-      btnStop.disabled = data.runner.state !== 'RUNNING' || role === 'VIEWER';
+      btnStop.disabled = !isRunning || role === 'VIEWER';
     }
   }
 
@@ -418,7 +426,7 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         const res = await apiFetch('/api/v1/runner/start', {
           method: 'POST',
-          body: { campaign_id: campaignId }
+          body: { campaign_id: parseInt(campaignId, 10) }
         });
         const data = await res.json();
         if (res.ok) {

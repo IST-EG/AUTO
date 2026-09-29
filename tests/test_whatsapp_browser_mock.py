@@ -171,3 +171,65 @@ def test_browser_start_with_settings_fallback():
         mock_service.assert_called_once_with(executable_path="/usr/bin/chromedriver")
         call_kwargs = mock_chrome.call_args.kwargs
         assert call_kwargs["options"].binary_location == "/usr/bin/google-chrome"
+
+
+def test_browser_wait_for_send_confirmation_zero_width_space(mock_driver):
+    """Verifies that rich-text zero-width spaces in compose box are treated as cleared."""
+    wb = WhatsAppBrowser(driver=mock_driver)
+
+    input_box = MagicMock()
+    input_box.text = "\u200b\ufeff   \u200b"
+
+    wb.find_first_element = MagicMock(return_value=input_box)
+    wb.is_element_present = MagicMock(return_value=True)
+
+    confirmed = wb.wait_for_send_confirmation(timeout=1.0)
+    assert confirmed is True
+
+
+def test_browser_wait_for_send_confirmation_timeout(mock_driver):
+    """Verifies that wait_for_send_confirmation returns False when checkmarks do not appear."""
+    wb = WhatsAppBrowser(driver=mock_driver)
+
+    input_box = MagicMock()
+    input_box.text = ""
+
+    wb.find_first_element = MagicMock(return_value=input_box)
+    wb.is_element_present = MagicMock(return_value=False)
+
+    confirmed = wb.wait_for_send_confirmation(timeout=0.6)
+    assert confirmed is False
+
+
+def test_browser_quit_reaps_child_processes(mock_driver):
+    """Verifies that quit() reaps child processes when _driver_pid is tracked."""
+    import psutil
+    wb = WhatsAppBrowser(driver=mock_driver)
+    wb._driver_pid = 43210
+
+    mock_proc = MagicMock()
+    mock_child = MagicMock()
+    mock_proc.children.return_value = [mock_child]
+
+    with patch("psutil.pid_exists", return_value=True), \
+         patch("psutil.Process", return_value=mock_proc), \
+         patch("psutil.wait_procs", return_value=([], [])):
+        wb.quit()
+
+        mock_child.terminate.assert_called_once()
+        mock_proc.terminate.assert_called_once()
+        assert wb.driver is None
+        assert wb._driver_pid is None
+
+
+def test_browser_start_removes_singleton_lock():
+    """Verifies that start() removes stale SingletonLock from session directory."""
+    with patch("os.makedirs"), \
+         patch("os.path.exists", side_effect=lambda p: "SingletonLock" in p), \
+         patch("os.unlink") as mock_unlink, \
+         patch("selenium.webdriver.Chrome"), \
+         patch("selenium.webdriver.chrome.service.Service"):
+        wb = WhatsAppBrowser(session_path="/dummy/session")
+        wb.start()
+        mock_unlink.assert_called_once()
+

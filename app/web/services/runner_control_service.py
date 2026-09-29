@@ -23,6 +23,7 @@ from app.models.campaign import Campaign
 from app.models.app_setting import AppSetting
 from app.models.audit_log import AuditLog
 from app.runner.process_lock import ProcessLock, is_pid_alive
+from app.scheduler.emergency_stop import EmergencyStop
 from app.readiness.preflight import run_preflight
 from app.utils.settings import settings
 from app.utils.logger import get_logger
@@ -86,6 +87,58 @@ class RunnerControlService:
                 db.rollback()
             except Exception:
                 pass
+
+    @classmethod
+    def enqueue_eligible_contacts(cls, db: Session, campaign: Campaign) -> int:
+        """Enqueues all ELIGIBLE campaign contacts into the message queue if not yet enqueued."""
+        from app.models.campaign_contact import CampaignContact
+        from app.models.contact import Contact
+        from app.models.message import Message
+        from app.queue.service import PersistentQueueService
+        from app.queue.state_machine import QueueState
+        from app.campaigns.template_service import MessageTemplateService
+
+        eligible_ccs = db.query(CampaignContact).filter(
+            CampaignContact.campaign_id == campaign.id,
+            CampaignContact.status == "ELIGIBLE"
+        ).all()
+
+        if not eligible_ccs:
+            return 0
+
+        queue_svc = PersistentQueueService(db)
+        now_utc = datetime.now(timezone.utc)
+        enqueued_count = 0
+
+        for cc in eligible_ccs:
+            existing_msg = db.query(Message).filter(
+                Message.campaign_contact_id == cc.id
+            ).first()
+            if not existing_msg:
+                contact = db.query(Contact).filter(Contact.id == cc.contact_id).first()
+                if contact:
+                    try:
+                        rendered = MessageTemplateService.render_message(
+                            campaign.message_template, contact, campaign
+                        )
+                    except Exception:
+                        rendered = campaign.message_template or "Hello"
+
+                    queue_svc.enqueue_message(
+                        campaign_id=campaign.id,
+                        contact_id=contact.id,
+                        rendered_content=rendered,
+                        campaign_contact_id=cc.id,
+                        sequence_number=1,
+                        initial_state=QueueState.QUEUED
+                    )
+                    cc.status = "ENQUEUED"
+                    cc.enqueued_at = now_utc
+                    enqueued_count += 1
+
+        if enqueued_count > 0:
+            db.commit()
+        return enqueued_count
 
     @classmethod
     def get_status(cls, db: Session) -> Dict[str, Any]:
@@ -198,8 +251,9 @@ class RunnerControlService:
         runner_spawner: Optional[Callable[[int], int]] = None
     ) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
         """
-        Validates target campaign and OS file lock, executes preflight readiness,
-        and launches the ProductionRunner background process.
+        Validates target campaign, checks safety guards, and coordinates runner start.
+        In remote mode (Vercel/coordination), delegates execution to the remote worker daemon via AppSetting.
+        In local mode, executes preflight readiness and launches the local background process.
         """
         # 1. Verify campaign exists
         campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
@@ -213,7 +267,82 @@ class RunnerControlService:
                 "Only campaigns in RUNNING state may be processed by a runner."
             ), None
 
-        # 3. Check authoritative OS file lock singularity
+        # 3. Check Emergency Stop
+        e_stop = EmergencyStop(db=db)
+        if e_stop.is_active():
+            return False, "Emergency stop is currently ACTIVE. Production runner cannot be started.", None
+
+        # Automatically enqueue any ELIGIBLE contacts before starting dispatch
+        cls.enqueue_eligible_contacts(db, campaign)
+
+        now = datetime.now(timezone.utc)
+        is_remote = (
+            bool(os.environ.get("VERCEL"))
+            or getattr(settings, "RUNNER_REMOTE_COORDINATION", False)
+            or not bool(getattr(settings, "WORKER_INSTANCE_ID", None))
+        )
+
+        # 4. Remote Coordination Mode
+        if is_remote and runner_spawner is None:
+            # Check worker heartbeat freshness
+            hb_row = db.query(AppSetting).filter(AppSetting.key == "system:worker_heartbeat").first()
+            if hb_row and hb_row.value:
+                try:
+                    hb_data = json.loads(hb_row.value)
+                    hb_time_str = hb_data.get("last_seen") or hb_data.get("timestamp")
+                    if hb_time_str:
+                        hb_dt = datetime.fromisoformat(hb_time_str.replace("Z", "+00:00"))
+                        age = (now - hb_dt).total_seconds()
+                        if age > 120:
+                            return False, f"Cannot start runner: Remote worker daemon heartbeat is stale ({int(age)}s old > 120s limit). Worker appears offline.", None
+                except Exception as e:
+                    logger.warning(f"Error parsing worker heartbeat: {e}")
+            else:
+                logger.warning("No worker heartbeat record found in AppSetting; proceeding with desired state coordination.")
+
+            # Check if runner is already active according to database lock
+            process_lock = ProcessLock(db=db)
+            active_info = process_lock.get_active_runner_info()
+            if active_info and active_info.get("pid"):
+                hb_str = active_info.get("heartbeat_at") or active_info.get("last_heartbeat") or active_info.get("started_at")
+                if hb_str:
+                    try:
+                        hb_dt = datetime.fromisoformat(hb_str.replace("Z", "+00:00"))
+                        if (now - hb_dt).total_seconds() <= 60:
+                            return False, (
+                                f"Cannot start runner: another production runner process is actively running "
+                                f"(PID: {active_info.get('pid')}, Campaign: {active_info.get('campaign_id')})."
+                            ), None
+                    except Exception:
+                        pass
+
+            # Coordinate start via database desired state
+            cls.set_desired_state(db=db, state="RUNNING", campaign_id=campaign_id)
+
+            audit = AuditLog(
+                event_type="RUNNER_START_REQUESTED",
+                status="SUCCESS",
+                campaign_id=campaign_id,
+                result=json.dumps({
+                    "actor": operator_username,
+                    "action": "RUNNER_START",
+                    "campaign_id": campaign_id,
+                    "spawned_pid": None,
+                    "mode": "REMOTE_COORDINATION",
+                }),
+                created_at=now,
+            )
+            db.add(audit)
+            db.commit()
+
+            return True, f"Production runner desired state set to RUNNING for Campaign {campaign_id}. Worker will engage on next poll.", {
+                "campaign_id": campaign_id,
+                "pid": None,
+                "started_at": now.isoformat(),
+                "desired_state": "RUNNING",
+            }
+
+        # 5. Local Execution Mode (or test spawner)
         process_lock = ProcessLock(db=db)
         active_info = process_lock.get_active_runner_info()
         if active_info and active_info.get("pid"):
@@ -225,26 +354,26 @@ class RunnerControlService:
                     "Process singularity permits only one runner per machine."
                 ), None
             else:
-                # Stale lock recovery
                 logger.info(f"Clearing stale runner lock from dead PID {existing_pid}.")
                 process_lock.release()
 
-        # 4. Preflight readiness verification
+        # Preflight readiness verification for local execution
         preflight = run_preflight(db=db, campaign_id=campaign_id, strict=False)
         if not preflight.passed:
-            failure_reasons = "; ".join(f"{c['name']}: {c['error']}" for c in preflight.checks if not c["passed"])
+            def _c_name(c):
+                return c.get("name", "Check") if isinstance(c, dict) else getattr(c, "name", "Check")
+            def _c_msg(c):
+                return c.get("error") or c.get("message", "Failed") if isinstance(c, dict) else getattr(c, "message", getattr(c, "error", "Failed"))
+            def _c_failed(c):
+                return not c.get("passed", False) if isinstance(c, dict) else not getattr(c, "passed", False)
+            failure_reasons = "; ".join(f"{_c_name(c)}: {_c_msg(c)}" for c in preflight.checks if _c_failed(c))
             return False, f"Preflight readiness check failed: {failure_reasons}", None
 
-        # 5. Spawn background runner process (or coordinate remote worker)
-        now = datetime.now(timezone.utc)
         cls.set_desired_state(db=db, state="RUNNING", campaign_id=campaign_id)
-        is_remote = bool(os.environ.get("VERCEL")) or getattr(settings, "RUNNER_REMOTE_COORDINATION", False)
 
         try:
             if runner_spawner is not None:
                 spawned_pid = runner_spawner(campaign_id)
-            elif is_remote:
-                spawned_pid = None
             else:
                 cmd = [
                     sys.executable,
@@ -275,7 +404,6 @@ class RunnerControlService:
                     )
                 spawned_pid = proc.pid
 
-            # 6. Record Audit Log
             audit = AuditLog(
                 event_type="RUNNER_START_REQUESTED",
                 status="SUCCESS",
@@ -285,20 +413,14 @@ class RunnerControlService:
                     "action": "RUNNER_START",
                     "campaign_id": campaign_id,
                     "spawned_pid": spawned_pid,
-                    "mode": "REMOTE_COORDINATION" if is_remote and runner_spawner is None else "LOCAL_PROCESS",
+                    "mode": "LOCAL_PROCESS",
                 }),
                 created_at=now,
             )
             db.add(audit)
             db.commit()
 
-            msg = (
-                f"Production runner desired state set to RUNNING for Campaign {campaign_id}. Worker will engage on next poll."
-                if is_remote and runner_spawner is None
-                else f"Production runner successfully initiated for Campaign {campaign_id} (PID: {spawned_pid})."
-            )
-
-            return True, msg, {
+            return True, f"Production runner successfully initiated for Campaign {campaign_id} (PID: {spawned_pid}).", {
                 "campaign_id": campaign_id,
                 "pid": spawned_pid,
                 "started_at": now.isoformat(),
