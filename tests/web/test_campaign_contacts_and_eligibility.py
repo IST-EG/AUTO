@@ -16,6 +16,7 @@ from app.models.user import UserRole
 from app.models.campaign import Campaign
 from app.models.contact import Contact
 from app.models.campaign_contact import CampaignContact
+from app.models.message import Message
 from app.web.config import web_settings
 from app.web.security.session import session_manager
 from app.web.security.csrf import csrf_manager
@@ -159,4 +160,240 @@ def test_campaign_contacts_edge_cases(web_session):
     with pytest.raises(HTTPException) as exc_info:
         CampaignContactService.remove_contact(web_session, c.id, 99999)
     assert exc_info.value.status_code == 404
+
+
+def test_campaign_contact_enrollment_payload_formats_and_draft_invariants(client, web_session, create_user):
+    """
+    Verifies:
+    - Enrollment succeeds using singular 'contact_id' payload format.
+    - Enrollment succeeds using plural 'contact_ids' payload format.
+    - Campaign status remains strictly DRAFT.
+    - No queue Message records are created.
+    """
+    operator = create_user("op_format_test", UserRole.OPERATOR)
+    cookies, headers = _auth(web_session, operator)
+
+    campaign = Campaign(name="Draft Invariant Campaign", message_template="Hi {{name}}", status="DRAFT")
+    c1 = Contact(name="Format Contact 1", phone_e164="+201099990001", country_code="20", consent_status="pending", contact_status="active")
+    c2 = Contact(name="Format Contact 2", phone_e164="+201099990002", country_code="20", consent_status="pending", contact_status="active")
+    web_session.add_all([campaign, c1, c2])
+    web_session.commit()
+
+    # 1. Singular payload format: {"contact_id": c1.id}
+    res_singular = client.post(
+        f"/api/v1/campaigns/{campaign.id}/contacts",
+        json={"contact_id": c1.id},
+        cookies=cookies,
+        headers=headers
+    )
+    assert res_singular.status_code == 200, res_singular.text
+    data_sing = res_singular.json()["data"]
+    assert data_sing["total"] == 1
+    assert data_sing["added"] == 1
+
+    # 2. Plural payload format: {"contact_ids": [c2.id]}
+    res_plural = client.post(
+        f"/api/v1/campaigns/{campaign.id}/contacts",
+        json={"contact_ids": [c2.id]},
+        cookies=cookies,
+        headers=headers
+    )
+    assert res_plural.status_code == 200, res_plural.text
+    data_plur = res_plural.json()["data"]
+    assert data_plur["total"] == 1
+    assert data_plur["added"] == 1
+
+    # Verify campaign remains DRAFT
+    web_session.expire_all()
+    camp_db = web_session.query(Campaign).filter(Campaign.id == campaign.id).first()
+    assert camp_db.status == "DRAFT"
+
+    # Verify no queue messages created
+    msg_count = web_session.query(Message).count()
+    assert msg_count == 0
+
+
+def test_campaign_contact_enrollment_validation_errors(client, web_session, create_user):
+    """
+    Verifies that invalid requests are rejected with status 422 and structured validation error details:
+    - Empty payload {}
+    - Empty list {"contact_ids": []}
+    - Invalid type {"contact_id": "not_an_int"}
+    - Non-positive integer {"contact_id": 0}
+    - Non-positive integer in list {"contact_ids": [-1]}
+    """
+    operator = create_user("op_val_test", UserRole.OPERATOR)
+    cookies, headers = _auth(web_session, operator)
+
+    campaign = Campaign(name="Val Test Campaign", message_template="Hi {{name}}", status="DRAFT")
+    web_session.add(campaign)
+    web_session.commit()
+
+    # 1. Empty body
+    r_empty = client.post(
+        f"/api/v1/campaigns/{campaign.id}/contacts",
+        json={},
+        cookies=cookies,
+        headers=headers
+    )
+    assert r_empty.status_code == 422
+    body_empty = r_empty.json()
+    assert body_empty["error"]["code"] == "VALIDATION_ERROR"
+    assert "At least one contact ID must be provided" in str(body_empty["error"]["details"])
+
+    # 2. Empty list
+    r_empty_list = client.post(
+        f"/api/v1/campaigns/{campaign.id}/contacts",
+        json={"contact_ids": []},
+        cookies=cookies,
+        headers=headers
+    )
+    assert r_empty_list.status_code == 422
+    body_el = r_empty_list.json()
+    assert body_el["error"]["code"] == "VALIDATION_ERROR"
+    assert "At least one contact ID must be provided" in str(body_el["error"]["details"])
+
+    # 3. Invalid type
+    r_invalid_type = client.post(
+        f"/api/v1/campaigns/{campaign.id}/contacts",
+        json={"contact_id": "invalid_number"},
+        cookies=cookies,
+        headers=headers
+    )
+    assert r_invalid_type.status_code == 422
+    body_it = r_invalid_type.json()
+    assert body_it["error"]["code"] == "VALIDATION_ERROR"
+
+    # 4. Zero ID
+    r_zero = client.post(
+        f"/api/v1/campaigns/{campaign.id}/contacts",
+        json={"contact_id": 0},
+        cookies=cookies,
+        headers=headers
+    )
+    assert r_zero.status_code == 422
+    body_zero = r_zero.json()
+    assert body_zero["error"]["code"] == "VALIDATION_ERROR"
+
+    # 5. Negative ID
+    r_neg = client.post(
+        f"/api/v1/campaigns/{campaign.id}/contacts",
+        json={"contact_ids": [-5]},
+        cookies=cookies,
+        headers=headers
+    )
+    assert r_neg.status_code == 422
+    body_neg = r_neg.json()
+    assert body_neg["error"]["code"] == "VALIDATION_ERROR"
+    assert "Contact IDs must be positive integers" in str(body_neg["error"]["details"])
+
+
+def test_campaign_contact_enrollment_duplicates_and_nonexistent(client, web_session, create_user):
+    """
+    Verifies:
+    - Non-existent campaign returns 404.
+    - Non-existent contact returns 400.
+    - Duplicate enrollment is handled safely without crashing.
+    """
+    operator = create_user("op_dup_test", UserRole.OPERATOR)
+    cookies, headers = _auth(web_session, operator)
+
+    campaign = Campaign(name="Dup Test Campaign", message_template="Hi {{name}}", status="DRAFT")
+    c1 = Contact(name="Dup Contact", phone_e164="+201099990003", country_code="20", consent_status="pending", contact_status="active")
+    web_session.add_all([campaign, c1])
+    web_session.commit()
+
+    # 1. Non-existent campaign
+    r_nocamp = client.post(
+        "/api/v1/campaigns/99999/contacts",
+        json={"contact_id": c1.id},
+        cookies=cookies,
+        headers=headers
+    )
+    assert r_nocamp.status_code == 404
+
+    # 2. Non-existent contact
+    r_nocontact = client.post(
+        f"/api/v1/campaigns/{campaign.id}/contacts",
+        json={"contact_id": 88888},
+        cookies=cookies,
+        headers=headers
+    )
+    assert r_nocontact.status_code == 400
+
+    # 3. First enrollment succeeds
+    r_first = client.post(
+        f"/api/v1/campaigns/{campaign.id}/contacts",
+        json={"contact_id": c1.id},
+        cookies=cookies,
+        headers=headers
+    )
+    assert r_first.status_code == 200
+    assert r_first.json()["data"]["added"] == 1
+    assert r_first.json()["data"]["duplicates"] == 0
+
+    # 4. Second enrollment handles duplicate safely
+    r_second = client.post(
+        f"/api/v1/campaigns/{campaign.id}/contacts",
+        json={"contact_id": c1.id},
+        cookies=cookies,
+        headers=headers
+    )
+    assert r_second.status_code == 200
+    assert r_second.json()["data"]["added"] == 0
+    assert r_second.json()["data"]["duplicates"] == 1
+
+
+def test_campaign_contact_enrollment_security_and_csrf(client, web_session, create_user):
+    """
+    Verifies:
+    - Unauthenticated request is rejected (401).
+    - Insufficient role (e.g. VIEWER) is rejected (403).
+    - Missing CSRF header is rejected (403).
+    - Invalid CSRF token is rejected (403).
+    """
+    operator = create_user("op_sec_test", UserRole.OPERATOR)
+    viewer = create_user("viewer_sec_test", UserRole.VIEWER)
+    op_cookies, op_headers = _auth(web_session, operator)
+    viewer_cookies, viewer_headers = _auth(web_session, viewer)
+
+    campaign = Campaign(name="Sec Test Campaign", message_template="Hi {{name}}", status="DRAFT")
+    c1 = Contact(name="Sec Contact", phone_e164="+201099990004", country_code="20", consent_status="pending", contact_status="active")
+    web_session.add_all([campaign, c1])
+    web_session.commit()
+
+    # 1. Unauthenticated (no cookies)
+    r_noauth = client.post(
+        f"/api/v1/campaigns/{campaign.id}/contacts",
+        json={"contact_id": c1.id}
+    )
+    assert r_noauth.status_code == 401
+
+    # 2. VIEWER role
+    r_viewer = client.post(
+        f"/api/v1/campaigns/{campaign.id}/contacts",
+        json={"contact_id": c1.id},
+        cookies=viewer_cookies,
+        headers=viewer_headers
+    )
+    assert r_viewer.status_code == 403
+
+    # 3. Missing CSRF header
+    r_nocsrf = client.post(
+        f"/api/v1/campaigns/{campaign.id}/contacts",
+        json={"contact_id": c1.id},
+        cookies=op_cookies
+    )
+    assert r_nocsrf.status_code == 403
+
+    # 4. Invalid CSRF header
+    bad_headers = {"X-CSRF-Token": "invalid_token_12345"}
+    r_badcsrf = client.post(
+        f"/api/v1/campaigns/{campaign.id}/contacts",
+        json={"contact_id": c1.id},
+        cookies=op_cookies,
+        headers=bad_headers
+    )
+    assert r_badcsrf.status_code == 403
+
 

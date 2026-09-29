@@ -4,7 +4,7 @@ Pydantic schemas for Campaigns.
 
 from datetime import datetime
 from typing import List, Optional
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class CampaignStatsDTO(BaseModel):
@@ -98,7 +98,18 @@ class CampaignContactDTO(BaseModel):
 
 
 class CampaignAddContactsRequest(BaseModel):
-    contact_ids: List[int] = Field(..., min_length=1)
+    contact_ids: Optional[List[int]] = Field(None, description="List of contact IDs to enroll")
+    contact_id: Optional[int] = Field(None, ge=1, description="Single contact ID to enroll")
+
+    @model_validator(mode="after")
+    def validate_and_normalize(self) -> "CampaignAddContactsRequest":
+        if self.contact_ids is None and self.contact_id is not None:
+            self.contact_ids = [self.contact_id]
+        if not self.contact_ids:
+            raise ValueError("At least one contact ID must be provided (contact_ids or contact_id).")
+        if any(cid < 1 for cid in self.contact_ids):
+            raise ValueError("Contact IDs must be positive integers (>= 1).")
+        return self
 
 
 class CampaignAddContactsResponse(BaseModel):

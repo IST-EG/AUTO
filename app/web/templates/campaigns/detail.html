@@ -240,13 +240,18 @@ async function enrollContact() {
   try {
     const res = await apiFetch('/api/v1/campaigns/{{ campaign.id }}/contacts', {
       method: 'POST',
-      body: { contact_id: parseInt(contactId, 10) }
+      body: { contact_ids: [parseInt(contactId, 10)] }
     });
     const result = await res.json();
     if (res.ok && result.success) {
       window.location.reload();
     } else {
-      errBox.textContent = result.error?.message || result.detail || 'Failed to enroll contact.';
+      let errorMsg = result.error?.message || result.detail || 'Failed to enroll contact.';
+      if (result.error?.details && Array.isArray(result.error.details) && result.error.details.length > 0) {
+        const detailStr = result.error.details.map(d => `${d.field ? d.field + ': ' : ''}${d.issue}`).join(', ');
+        errorMsg = `${errorMsg} (${detailStr})`;
+      }
+      errBox.textContent = errorMsg;
       errBox.style.display = 'block';
     }
   } catch (err) {
