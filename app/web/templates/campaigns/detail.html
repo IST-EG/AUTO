@@ -211,7 +211,12 @@ async function transitionCampaignStatus(newStatus) {
       window.location.reload();
     } else {
       alertBox.className = 'alert alert-danger';
-      alertBox.textContent = result.error?.message || result.detail || `Cannot transition to ${newStatus}.`;
+      let errorMsg = result.error?.message || result.detail || `Cannot transition to ${newStatus}.`;
+      if (result.error?.details && Array.isArray(result.error.details) && result.error.details.length > 0) {
+        const detailStr = result.error.details.map(d => `${d.field ? d.field + ': ' : ''}${d.issue}`).join(', ');
+        errorMsg = `${errorMsg} (${detailStr})`;
+      }
+      alertBox.textContent = errorMsg;
       alertBox.style.display = 'block';
     }
   } catch (err) {

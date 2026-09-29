@@ -201,7 +201,7 @@ def test_campaign_api_operator_crud_and_status(client, web_session, create_user)
     assert patch_resp.status_code == 200
     assert patch_resp.json()["data"]["daily_limit"] == 150
 
-    # 4. Transition status to RUNNING (strictly domain state)
+    # 4. Transition status to RUNNING via /status (strictly domain state)
     status_resp = client.post(
         f"/api/v1/campaigns/{camp_id}/status",
         json={"status": "RUNNING"},
@@ -210,6 +210,16 @@ def test_campaign_api_operator_crud_and_status(client, web_session, create_user)
     )
     assert status_resp.status_code == 200
     assert status_resp.json()["data"]["status"] == "RUNNING"
+
+    # 4b. Transition status via /transition route alias
+    transition_resp = client.post(
+        f"/api/v1/campaigns/{camp_id}/transition",
+        json={"status": "PAUSED"},
+        cookies=cookies,
+        headers=headers
+    )
+    assert transition_resp.status_code == 200
+    assert transition_resp.json()["data"]["status"] == "PAUSED"
 
     # 5. Verify list endpoint contains it
     list_resp = client.get("/api/v1/campaigns", cookies=cookies)

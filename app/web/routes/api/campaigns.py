@@ -95,6 +95,11 @@ def update_campaign(
     response_model=APIResponse[CampaignDetailDTO],
     dependencies=[Depends(require_operator), Depends(verify_csrf)],
 )
+@router.post(
+    "/{campaign_id}/transition",
+    response_model=APIResponse[CampaignDetailDTO],
+    dependencies=[Depends(require_operator), Depends(verify_csrf)],
+)
 def transition_campaign_status(
     campaign_id: int = Path(..., ge=1),
     req: CampaignStatusTransitionRequest = ...,
