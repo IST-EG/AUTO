@@ -434,7 +434,7 @@ document.addEventListener('DOMContentLoaded', () => {
           showAlert('dashboard-global-alert', `Runner start requested successfully (PID: ${data.pid || 'Remote Desired State Set'}).`, 'success');
           await fetchDashboardSnapshot();
         } else {
-          showAlert('start-runner-error', data.detail || 'Failed to start runner.', 'error');
+          showAlert('start-runner-error', data.error?.message || data.detail || 'Failed to start runner.', 'error');
         }
       } catch (err) {
         showAlert('start-runner-error', `Request error: ${err.message}`, 'error');
@@ -465,7 +465,7 @@ document.addEventListener('DOMContentLoaded', () => {
           showAlert('dashboard-global-alert', 'Runner graceful stop requested successfully.', 'success');
           await fetchDashboardSnapshot();
         } else {
-          showAlert('stop-runner-error', data.detail || 'Failed to stop runner.', 'error');
+          showAlert('stop-runner-error', data.error?.message || data.detail || 'Failed to stop runner.', 'error');
         }
       } catch (err) {
         showAlert('stop-runner-error', `Request error: ${err.message}`, 'error');
@@ -504,7 +504,7 @@ document.addEventListener('DOMContentLoaded', () => {
           showAlert('dashboard-global-alert', 'EMERGENCY STOP ACTIVE — All queue dispatch claims blocked.', 'error');
           await fetchDashboardSnapshot();
         } else {
-          showAlert('emergency-stop-error', data.detail || 'Failed to trigger emergency stop.', 'error');
+          showAlert('emergency-stop-error', data.error?.message || data.detail || 'Failed to trigger emergency stop.', 'error');
         }
       } catch (err) {
         showAlert('emergency-stop-error', `Request error: ${err.message}`, 'error');
@@ -542,7 +542,7 @@ document.addEventListener('DOMContentLoaded', () => {
           showAlert('dashboard-global-alert', 'Dispatch operations resumed successfully. Emergency stop inactive.', 'success');
           await fetchDashboardSnapshot();
         } else {
-          showAlert('emergency-resume-error', data.detail || 'Failed to resume operations.', 'error');
+          showAlert('emergency-resume-error', data.error?.message || data.detail || 'Failed to resume operations.', 'error');
         }
       } catch (err) {
         showAlert('emergency-resume-error', `Request error: ${err.message}`, 'error');
