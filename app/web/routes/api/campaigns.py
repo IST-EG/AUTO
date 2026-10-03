@@ -145,7 +145,13 @@ def add_campaign_contacts(
 ):
     """Adds contacts to a campaign evaluating eligibility."""
     data = CampaignContactService.add_contacts(
-        db, campaign_id=campaign_id, contact_ids=req.contact_ids, username=current_user.username
+        db,
+        campaign_id=campaign_id,
+        contact_ids=req.contact_ids,
+        phone_e164=req.phone_e164,
+        name=req.name,
+        company=req.company,
+        username=current_user.username
     )
     return APIResponse.ok(data)
 

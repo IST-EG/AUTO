@@ -116,8 +116,7 @@ document.getElementById('create-template-form').addEventListener('submit', async
   const description = document.getElementById('tmpl-desc').value.trim();
   const body = document.getElementById('tmpl-body').value.trim();
 
-  btn.disabled = true;
-  btn.textContent = 'Saving...';
+  setButtonLoading(btn, true, 'Saving Template...');
 
   try {
     const res = await apiFetch('/api/v1/templates', {
@@ -136,15 +135,13 @@ document.getElementById('create-template-form').addEventListener('submit', async
       alertBox.className = 'alert alert-danger';
       alertBox.textContent = result.error?.message || result.detail || 'Failed to save template.';
       alertBox.style.display = 'block';
-      btn.disabled = false;
-      btn.textContent = 'Save Template (v1)';
+      setButtonLoading(btn, false);
     }
   } catch (err) {
     alertBox.className = 'alert alert-danger';
     alertBox.textContent = 'Network or server error creating template.';
     alertBox.style.display = 'block';
-    btn.disabled = false;
-    btn.textContent = 'Save Template (v1)';
+    setButtonLoading(btn, false);
   }
 });
 </script>

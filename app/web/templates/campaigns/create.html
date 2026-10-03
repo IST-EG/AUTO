@@ -154,8 +154,7 @@ document.getElementById('create-campaign-form').addEventListener('submit', async
     }
   }
 
-  btn.disabled = true;
-  btn.textContent = 'Creating...';
+  setButtonLoading(btn, true, 'Creating Campaign...');
 
   try {
     const payload = {
@@ -181,15 +180,13 @@ document.getElementById('create-campaign-form').addEventListener('submit', async
       alertBox.className = 'alert alert-danger';
       alertBox.textContent = result.error?.message || result.detail || 'Failed to create campaign.';
       alertBox.style.display = 'block';
-      btn.disabled = false;
-      btn.textContent = 'Create Campaign';
+      setButtonLoading(btn, false);
     }
   } catch (err) {
     alertBox.className = 'alert alert-danger';
     alertBox.textContent = 'Network or server error creating campaign.';
     alertBox.style.display = 'block';
-    btn.disabled = false;
-    btn.textContent = 'Create Campaign';
+    setButtonLoading(btn, false);
   }
 });
 </script>

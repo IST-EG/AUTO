@@ -23,7 +23,7 @@ class CampaignManager:
         "DRAFT": {"SCHEDULED", "RUNNING"},
         "SCHEDULED": {"RUNNING"},
         "RUNNING": {"PAUSED", "COMPLETED", "CANCELLED", "FAILED"},
-        "PAUSED": {"RUNNING", "CANCELLED"},
+        "PAUSED": {"RUNNING", "CANCELLED", "DRAFT"},
         "COMPLETED": set(),
         "CANCELLED": set(),
         "FAILED": set(),

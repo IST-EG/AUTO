@@ -58,6 +58,26 @@ function closeModal(id) {
   }
 }
 
+function setButtonLoading(btn, isLoading, loadingText = '') {
+  if (!btn) return;
+  if (isLoading) {
+    if (!btn.dataset.origHtml) {
+      btn.dataset.origHtml = btn.innerHTML;
+    }
+    btn.disabled = true;
+    btn.classList.add('btn-loading');
+    const text = loadingText || btn.dataset.loadingText || 'Processing...';
+    btn.innerHTML = `<span class="spinner-sm"></span> ${text}`;
+  } else {
+    btn.disabled = false;
+    btn.classList.remove('btn-loading');
+    if (btn.dataset.origHtml) {
+      btn.innerHTML = btn.dataset.origHtml;
+      delete btn.dataset.origHtml;
+    }
+  }
+}
+
 // Close modal on escape key or clicking backdrop
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
@@ -421,7 +441,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      btnConfirmStartRunner.disabled = true;
+      setButtonLoading(btnConfirmStartRunner, true, 'Starting Worker Daemon...');
       hideAlert('start-runner-error');
       try {
         const res = await apiFetch('/api/v1/runner/start', {
@@ -439,7 +459,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (err) {
         showAlert('start-runner-error', `Request error: ${err.message}`, 'error');
       } finally {
-        btnConfirmStartRunner.disabled = false;
+        setButtonLoading(btnConfirmStartRunner, false);
       }
     });
   }
@@ -452,7 +472,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnConfirmStopRunner = document.getElementById('btn-confirm-stop-runner');
   if (btnConfirmStopRunner) {
     btnConfirmStopRunner.addEventListener('click', async () => {
-      btnConfirmStopRunner.disabled = true;
+      setButtonLoading(btnConfirmStopRunner, true, 'Stopping Runner...');
       hideAlert('stop-runner-error');
       try {
         const res = await apiFetch('/api/v1/runner/stop', {
@@ -470,7 +490,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (err) {
         showAlert('stop-runner-error', `Request error: ${err.message}`, 'error');
       } finally {
-        btnConfirmStopRunner.disabled = false;
+        setButtonLoading(btnConfirmStopRunner, false);
       }
     });
   }
@@ -491,7 +511,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      btnConfirmEstop.disabled = true;
+      setButtonLoading(btnConfirmEstop, true, 'Triggering Emergency Stop...');
       hideAlert('emergency-stop-error');
       try {
         const res = await apiFetch('/api/v1/system/emergency-stop', {
@@ -509,7 +529,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (err) {
         showAlert('emergency-stop-error', `Request error: ${err.message}`, 'error');
       } finally {
-        btnConfirmEstop.disabled = false;
+        setButtonLoading(btnConfirmEstop, false);
       }
     });
   }
@@ -529,7 +549,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      btnConfirmResume.disabled = true;
+      setButtonLoading(btnConfirmResume, true, 'Resuming Operations...');
       hideAlert('emergency-resume-error');
       try {
         const res = await apiFetch('/api/v1/system/emergency-resume', {
@@ -547,7 +567,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (err) {
         showAlert('emergency-resume-error', `Request error: ${err.message}`, 'error');
       } finally {
-        btnConfirmResume.disabled = false;
+        setButtonLoading(btnConfirmResume, false);
       }
     });
   }

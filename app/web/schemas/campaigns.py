@@ -100,14 +100,17 @@ class CampaignContactDTO(BaseModel):
 class CampaignAddContactsRequest(BaseModel):
     contact_ids: Optional[List[int]] = Field(None, description="List of contact IDs to enroll")
     contact_id: Optional[int] = Field(None, ge=1, description="Single contact ID to enroll")
+    phone_e164: Optional[str] = Field(None, description="Direct phone number to create/enroll (E.164)")
+    name: Optional[str] = Field(None, description="Contact name if adding directly by phone")
+    company: Optional[str] = Field(None, description="Company name if adding directly by phone")
 
     @model_validator(mode="after")
     def validate_and_normalize(self) -> "CampaignAddContactsRequest":
         if self.contact_ids is None and self.contact_id is not None:
             self.contact_ids = [self.contact_id]
-        if not self.contact_ids:
-            raise ValueError("At least one contact ID must be provided (contact_ids or contact_id).")
-        if any(cid < 1 for cid in self.contact_ids):
+        if not self.contact_ids and not self.phone_e164:
+            raise ValueError("At least one contact ID must be provided.")
+        if self.contact_ids and any(cid < 1 for cid in self.contact_ids):
             raise ValueError("Contact IDs must be positive integers (>= 1).")
         return self
 

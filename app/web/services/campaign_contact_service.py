@@ -69,10 +69,13 @@ class CampaignContactService:
     def add_contacts(
         db: Session,
         campaign_id: int,
-        contact_ids: List[int],
+        contact_ids: Optional[List[int]] = None,
+        phone_e164: Optional[str] = None,
+        name: Optional[str] = None,
+        company: Optional[str] = None,
         username: Optional[str] = None
     ) -> CampaignAddContactsResponse:
-        """Adds a list of contacts to a campaign evaluating eligibility."""
+        """Adds contacts to a campaign evaluating eligibility."""
         campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
         if not campaign:
             raise HTTPException(
@@ -80,15 +83,41 @@ class CampaignContactService:
                 detail=f"Campaign {campaign_id} not found."
             )
 
-        contacts = db.query(Contact).filter(Contact.id.in_(contact_ids)).all()
-        if not contacts:
+        resolved_contacts = []
+        if contact_ids:
+            resolved_contacts = db.query(Contact).filter(Contact.id.in_(contact_ids)).all()
+
+        if phone_e164:
+            clean_phone = phone_e164.strip()
+            # Find or create contact
+            c = db.query(Contact).filter(Contact.phone_e164 == clean_phone).first()
+            if not c:
+                c = Contact(
+                    name=name.strip() if name and name.strip() else clean_phone,
+                    phone_e164=clean_phone,
+                    company=company.strip() if company and company.strip() else None,
+                    contact_status="active",
+                    consent_status="opted_in"
+                )
+                db.add(c)
+                db.commit()
+                db.refresh(c)
+            if c not in resolved_contacts:
+                resolved_contacts.append(c)
+
+        if not resolved_contacts:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No matching contacts found for the given IDs."
+                detail="No matching contacts found for the given IDs or phone number."
             )
 
         mgr = CampaignContactManager(db)
-        summary = mgr.add_multiple_contacts(campaign, contacts)
+        summary = mgr.add_multiple_contacts(campaign, resolved_contacts)
+
+        # If campaign is RUNNING, auto-enqueue new ELIGIBLE contacts immediately
+        if campaign.status == "RUNNING":
+            from app.web.services.runner_control_service import RunnerControlService
+            RunnerControlService.enqueue_eligible_contacts(db, campaign)
 
         return CampaignAddContactsResponse(
             total=summary.get("total", 0),
@@ -115,7 +144,7 @@ class CampaignContactService:
                 detail=f"Campaign {campaign_id} not found."
             )
 
-        if campaign.status != "DRAFT":
+        if campaign.status not in ("DRAFT", "PAUSED"):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Cannot remove contacts from campaign in '{campaign.status}' state. Only DRAFT campaigns allow removals."

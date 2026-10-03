@@ -191,7 +191,7 @@ class CampaignService:
                 detail=f"Campaign {campaign_id} not found."
             )
 
-        if campaign.status != "DRAFT":
+        if campaign.status not in ("DRAFT", "PAUSED"):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Cannot edit campaign in '{campaign.status}' state. Only DRAFT campaigns can be modified."
@@ -239,6 +239,28 @@ class CampaignService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=str(exc)
             )
+
+        # If template was updated, re-render any unsent messages
+        if "message_template" in kwargs:
+            from app.models.message import Message
+            from app.models.contact import Contact
+            from app.campaigns.template_service import MessageTemplateService
+            new_tmpl = kwargs["message_template"]
+            unsent_msgs = db.query(Message).filter(
+                Message.campaign_id == campaign_id,
+                Message.status.in_(("QUEUED", "PENDING"))
+            ).all()
+            for msg in unsent_msgs:
+                contact = db.query(Contact).filter(Contact.id == msg.contact_id).first()
+                if contact:
+                    try:
+                        msg.rendered_content = MessageTemplateService.render_message(
+                            new_tmpl, contact, campaign
+                        )
+                    except Exception:
+                        pass
+            if unsent_msgs:
+                db.commit()
 
         return CampaignService.get_campaign(db, campaign_id)
 

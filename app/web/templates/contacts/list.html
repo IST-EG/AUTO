@@ -210,8 +210,7 @@ document.getElementById('create-contact-form').addEventListener('submit', async 
   const city = document.getElementById('c-city').value.trim() || null;
   const consent = document.getElementById('c-consent').value;
 
-  btn.disabled = true;
-  btn.textContent = 'Saving...';
+  setButtonLoading(btn, true, 'Saving Contact...');
 
   try {
     const res = await apiFetch('/api/v1/contacts', {
@@ -232,15 +231,13 @@ document.getElementById('create-contact-form').addEventListener('submit', async 
       alertBox.className = 'alert alert-danger';
       alertBox.textContent = result.error?.message || result.detail || 'Failed to create contact.';
       alertBox.style.display = 'block';
-      btn.disabled = false;
-      btn.textContent = 'Create Contact';
+      setButtonLoading(btn, false);
     }
   } catch (err) {
     alertBox.className = 'alert alert-danger';
     alertBox.textContent = 'Network or server error creating contact.';
     alertBox.style.display = 'block';
-    btn.disabled = false;
-    btn.textContent = 'Create Contact';
+    setButtonLoading(btn, false);
   }
 });
 </script>

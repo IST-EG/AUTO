@@ -835,6 +835,28 @@ code, kbd, samp, pre {
   pointer-events: none;
 }
 
+.btn-loading {
+  position: relative;
+  pointer-events: none;
+  opacity: 0.85 !important;
+}
+
+.spinner-sm {
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-radius: 50%;
+  border-top-color: currentColor;
+  animation: ids-spin 0.7s linear infinite;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+
+@keyframes ids-spin {
+  to { transform: rotate(360deg); }
+}
+
 /* ==========================================================================
    FORM CONTROLS & INPUTS
    ========================================================================== */

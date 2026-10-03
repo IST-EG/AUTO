@@ -20,7 +20,7 @@
   <!-- Header & Status Controls -->
   <div class="page-header">
     <div>
-      <div style="display: flex; align-items: center; gap: var(--space-3);">
+      <div style="display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap;">
         <h1 class="page-header-title">{{ campaign.name }}</h1>
         <span class="status-pill status-{{ campaign.status.lower() }}" id="campaign-status-pill">{{ campaign.status }}</span>
       </div>
@@ -30,17 +30,20 @@
     </div>
 
     <!-- State Transition Action Buttons -->
-    <div class="page-header-actions">
+    <div class="page-header-actions" style="display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap;">
       {% if campaign.status == 'DRAFT' %}
-        <button onclick="transitionCampaignStatus('RUNNING')" class="btn btn-success btn-sm">Set to RUNNING</button>
-        <button onclick="transitionCampaignStatus('CANCELLED')" class="btn btn-danger btn-sm">Cancel Campaign</button>
+        <button onclick="transitionCampaignStatus('RUNNING', this)" class="btn btn-success btn-sm">▶ Start Campaign (RUNNING)</button>
+        <button onclick="openEditModal()" class="btn btn-secondary btn-sm">✏️ Edit Settings & Template</button>
+        <button onclick="transitionCampaignStatus('CANCELLED', this)" class="btn btn-danger btn-sm">Cancel Campaign</button>
       {% elif campaign.status == 'RUNNING' %}
-        <button onclick="transitionCampaignStatus('PAUSED')" class="btn btn-secondary btn-sm">Pause Campaign</button>
-        <button onclick="transitionCampaignStatus('COMPLETED')" class="btn btn-success btn-sm">Mark Completed</button>
-        <button onclick="transitionCampaignStatus('CANCELLED')" class="btn btn-danger btn-sm">Cancel Campaign</button>
+        <button onclick="transitionCampaignStatus('PAUSED', this)" class="btn btn-secondary btn-sm">⏸ Pause Campaign</button>
+        <button onclick="transitionCampaignStatus('COMPLETED', this)" class="btn btn-success btn-sm">✓ Mark Completed</button>
+        <button onclick="transitionCampaignStatus('CANCELLED', this)" class="btn btn-danger btn-sm">Cancel Campaign</button>
       {% elif campaign.status == 'PAUSED' %}
-        <button onclick="transitionCampaignStatus('RUNNING')" class="btn btn-success btn-sm">Resume (RUNNING)</button>
-        <button onclick="transitionCampaignStatus('CANCELLED')" class="btn btn-danger btn-sm">Cancel Campaign</button>
+        <button onclick="transitionCampaignStatus('RUNNING', this)" class="btn btn-success btn-sm">▶ Resume (RUNNING)</button>
+        <button onclick="openEditModal()" class="btn btn-primary btn-sm">✏️ Edit Settings & Template</button>
+        <button onclick="transitionCampaignStatus('DRAFT', this)" class="btn btn-secondary btn-sm">↺ Reset to DRAFT</button>
+        <button onclick="transitionCampaignStatus('CANCELLED', this)" class="btn btn-danger btn-sm">Cancel Campaign</button>
       {% endif %}
     </div>
   </div>
@@ -56,30 +59,41 @@
     </div>
   </div>
 
-  <div id="detail-alert" class="alert"></div>
+  <div id="detail-alert" class="alert" style="display: none;"></div>
 
   <!-- Parameters & Stats 2-Column Grid -->
   <div style="display: grid; grid-template-columns: 2fr 1fr; gap: var(--space-5); margin-bottom: var(--space-6);">
-    <!-- Frozen Template Snapshot -->
+    <!-- Template Snapshot & Edit -->
     <div class="card">
-      <div class="card-header">
-        <div class="card-title">Message Template Snapshot</div>
-        <span class="sidebar-badge">Snapshot Frozen</span>
-      </div>
-      <div style="background-color: var(--ids-canvas); border: 1px solid var(--ids-border); border-radius: var(--radius-sm); padding: var(--space-4); font-family: var(--font-mono); font-size: 13px; white-space: pre-wrap; line-height: 1.6;">{{ campaign.message_template }}</div>
-      <div style="margin-top: var(--space-3); font-size: 11px; color: var(--ids-text-muted);">
-        {% if campaign.template_version_id %}
-          Linked to Template Version #{{ campaign.template_version_id }}. Edits to the template library will not mutate this campaign.
+      <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <div class="card-title">Message Template</div>
+        {% if campaign.status in ['DRAFT', 'PAUSED'] %}
+        <button onclick="openEditModal()" class="btn btn-secondary btn-sm" style="padding: 3px 10px;">✏️ Edit Message</button>
+        {% elif campaign.status == 'RUNNING' %}
+        <span class="sidebar-badge" title="Pause campaign first to edit template">Running (Read Only)</span>
         {% else %}
-          Inline Custom Template snapshot frozen at creation time.
+        <span class="sidebar-badge">Snapshot Frozen</span>
+        {% endif %}
+      </div>
+      <div id="campaign-template-preview" style="background-color: var(--ids-canvas); border: 1px solid var(--ids-border); border-radius: var(--radius-sm); padding: var(--space-4); font-family: var(--font-mono); font-size: 13px; white-space: pre-wrap; line-height: 1.6;">{{ campaign.message_template }}</div>
+      <div style="margin-top: var(--space-3); font-size: 11px; color: var(--ids-text-muted);">
+        {% if campaign.status in ['DRAFT', 'PAUSED'] %}
+          <span>💡 You can edit this template directly anytime while campaign is <strong>DRAFT</strong> or <strong>PAUSED</strong>.</span>
+        {% elif campaign.status == 'RUNNING' %}
+          <span style="color: var(--ids-warning);">⚠️ Campaign is actively running. To edit the template text, click <strong>Pause Campaign</strong> above first.</span>
+        {% else %}
+          Inline Custom Template snapshot frozen.
         {% endif %}
       </div>
     </div>
 
     <!-- Pacing Settings Card -->
     <div class="card">
-      <div class="card-header">
+      <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
         <div class="card-title">Pacing Safeguards</div>
+        {% if campaign.status in ['DRAFT', 'PAUSED'] %}
+        <button onclick="openEditModal()" class="btn btn-outline btn-sm" style="padding: 2px 8px; font-size: 11px;">Edit</button>
+        {% endif %}
       </div>
       <div style="font-size: 13px;">
         <div class="subsystem-row">
@@ -104,14 +118,14 @@
 
   <!-- Enrolled Contacts Section -->
   <div class="card">
-    <div class="card-header">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--space-2);">
       <div>
         <div class="card-title">Campaign Contacts Breakdown</div>
         <div class="card-subtitle">Audience enrollment, dispatch status, and eligibility exclusion reasons</div>
       </div>
-      {% if campaign.status == 'DRAFT' %}
+      {% if campaign.status in ['DRAFT', 'PAUSED', 'RUNNING'] %}
       <div style="display: flex; gap: var(--space-2);">
-        <button onclick="openEnrollModal()" class="btn btn-secondary btn-sm">+ Enroll Contact</button>
+        <button onclick="openEnrollModal()" class="btn btn-primary btn-sm">+ Add / Enroll Contact</button>
       </div>
       {% endif %}
     </div>
@@ -126,7 +140,7 @@
             <th>Company</th>
             <th>Status</th>
             <th>Eligibility Note</th>
-            {% if campaign.status == 'DRAFT' %}
+            {% if campaign.status in ['DRAFT', 'PAUSED', 'RUNNING'] %}
             <th style="text-align: right;">Action</th>
             {% endif %}
           </tr>
@@ -143,9 +157,17 @@
                 <span class="status-pill status-{{ c.status.lower() }}">{{ c.status }}</span>
               </td>
               <td class="table-cell-muted" style="font-size: 12px;">{{ c.eligibility_reason or 'Eligible' }}</td>
-              {% if campaign.status == 'DRAFT' %}
+              {% if campaign.status in ['DRAFT', 'PAUSED', 'RUNNING'] %}
               <td class="table-cell-right">
-                <button onclick="removeContact({{ c.contact_id }})" class="btn btn-danger btn-sm" style="padding: 3px 8px;">Remove</button>
+                {% if c.status in ['PENDING', 'QUEUED', 'ELIGIBLE', 'EXCLUDED'] %}
+                  {% if campaign.status == 'RUNNING' %}
+                    <button onclick="alertCannotRemoveRunning()" class="btn btn-outline btn-sm" style="padding: 2px 8px; font-size: 11px; opacity: 0.75;" title="Pause campaign first to remove contacts">Remove</button>
+                  {% else %}
+                    <button onclick="removeContact({{ c.contact_id }}, this)" class="btn btn-danger btn-sm" style="padding: 2px 8px; font-size: 11px;">Remove</button>
+                  {% endif %}
+                {% else %}
+                  <span class="table-cell-muted" style="font-size: 11px;">{{ c.status }}</span>
+                {% endif %}
               </td>
               {% endif %}
             </tr>
@@ -155,9 +177,9 @@
               <td colspan="7">
                 <div class="empty-state" style="padding: var(--space-6) var(--space-4);">
                   <div class="empty-state-title" style="font-size: 14px;">No contacts enrolled in this campaign</div>
-                  <div class="empty-state-desc" style="font-size: 12px; margin-bottom: var(--space-3);">Enroll target contacts from the directory while in DRAFT status.</div>
-                  {% if campaign.status == 'DRAFT' %}
-                  <button onclick="openEnrollModal()" class="btn btn-secondary btn-sm">+ Enroll Contact</button>
+                  <div class="empty-state-desc" style="font-size: 12px; margin-bottom: var(--space-3);">Add phone numbers directly or enroll contacts from the directory.</div>
+                  {% if campaign.status in ['DRAFT', 'PAUSED', 'RUNNING'] %}
+                  <button onclick="openEnrollModal()" class="btn btn-primary btn-sm">+ Add / Enroll Contact</button>
                   {% endif %}
                 </div>
               </td>
@@ -170,36 +192,228 @@
 
 </div>
 
-<!-- MODAL: ENROLL CONTACT (Draft only) -->
+<!-- MODAL: ADD / ENROLL CONTACT -->
 <div id="modal-enroll-contact" class="modal-backdrop">
   <div class="modal-dialog">
     <div class="modal-header">
-      <h3 class="modal-title">Enroll Contact into Campaign</h3>
+      <h3 class="modal-title">Add / Enroll Contact to Campaign</h3>
       <button onclick="closeModal('modal-enroll-contact')" class="modal-close-btn">&times;</button>
     </div>
     <div class="modal-body">
-      <div id="enroll-error" class="alert alert-error"></div>
-      <div class="form-group">
-        <label for="enroll-contact-select">Select Active Contact *</label>
-        <select id="enroll-contact-select" class="form-input">
-          <option value="">-- Choose contact --</option>
-          {% for ac in available_contacts %}
-            <option value="{{ ac.id }}">{{ ac.name }} ({{ ac.phone_e164 }})</option>
-          {% endfor %}
-        </select>
+      <div id="enroll-error" class="alert alert-danger" style="display: none;"></div>
+
+      <div style="display: flex; gap: var(--space-2); margin-bottom: var(--space-4); border-bottom: 1px solid var(--ids-border); padding-bottom: var(--space-3);">
+        <button type="button" id="tab-enroll-quick" onclick="setEnrollTab('quick')" class="btn btn-sm btn-primary" style="flex: 1;">Quick Add Phone Number</button>
+        <button type="button" id="tab-enroll-dir" onclick="setEnrollTab('dir')" class="btn btn-sm btn-outline" style="flex: 1;">Select from Directory</button>
+      </div>
+
+      <!-- Quick Add Form -->
+      <div id="pane-enroll-quick">
+        <div class="form-group">
+          <label for="enroll-phone">Phone Number (E.164 Format) *</label>
+          <input type="text" id="enroll-phone" class="form-input" placeholder="e.g. +201012345678" style="font-family: var(--font-mono);">
+          <div style="font-size: 11px; color: var(--ids-text-muted); margin-top: 4px;">Must start with <code>+</code> followed by country code (e.g. +20 for Egypt).</div>
+        </div>
+        <div class="form-group">
+          <label for="enroll-name">Contact Name</label>
+          <input type="text" id="enroll-name" class="form-input" placeholder="e.g. Ahmed Mohamed">
+        </div>
+        <div class="form-group">
+          <label for="enroll-company">Company</label>
+          <input type="text" id="enroll-company" class="form-input" placeholder="e.g. Acme Inc.">
+        </div>
+      </div>
+
+      <!-- Directory Dropdown Form -->
+      <div id="pane-enroll-dir" style="display: none;">
+        <div class="form-group">
+          <label for="enroll-contact-select">Select Active Contact *</label>
+          <select id="enroll-contact-select" class="form-input">
+            <option value="">-- Choose contact from directory --</option>
+            {% for ac in available_contacts %}
+              <option value="{{ ac.id }}">{{ ac.name }} ({{ ac.phone_e164 }}){% if ac.company %} - {{ ac.company }}{% endif %}</option>
+            {% endfor %}
+          </select>
+        </div>
       </div>
     </div>
     <div class="modal-footer">
       <button onclick="closeModal('modal-enroll-contact')" class="btn btn-secondary">Cancel</button>
-      <button onclick="enrollContact()" class="btn btn-primary">Enroll Contact</button>
+      <button onclick="enrollContact(this)" id="btn-submit-enroll" class="btn btn-primary">Add Contact</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: EDIT CAMPAIGN & TEMPLATE -->
+<div id="modal-edit-campaign" class="modal-backdrop">
+  <div class="modal-dialog" style="max-width: 650px;">
+    <div class="modal-header">
+      <h3 class="modal-title">Edit Campaign & Message Template</h3>
+      <button onclick="closeModal('modal-edit-campaign')" class="modal-close-btn">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="edit-campaign-error" class="alert alert-danger" style="display: none;"></div>
+
+      <div class="form-group">
+        <label for="edit-name">Campaign Name *</label>
+        <input type="text" id="edit-name" class="form-input" value="{{ campaign.name }}" required>
+      </div>
+
+      <div class="form-group">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+          <label for="edit-template" style="margin-bottom: 0;">Message Template *</label>
+          <div style="font-size: 11px; display: flex; gap: 4px; align-items: center;">
+            <span style="color: var(--ids-text-muted);">Insert tag:</span>
+            <button type="button" class="btn btn-outline btn-xs" style="padding: 1px 6px; font-size: 11px;" onclick="insertVariable('{{name}}')">&#123;&#123;name&#125;&#125;</button>
+            <button type="button" class="btn btn-outline btn-xs" style="padding: 1px 6px; font-size: 11px;" onclick="insertVariable('{{company}}')">&#123;&#123;company&#125;&#125;</button>
+            <button type="button" class="btn btn-outline btn-xs" style="padding: 1px 6px; font-size: 11px;" onclick="insertVariable('{{city}}')">&#123;&#123;city&#125;&#125;</button>
+          </div>
+        </div>
+        <textarea id="edit-template" class="form-input" rows="5" style="font-family: var(--font-mono); font-size: 13px;" required>{{ campaign.message_template }}</textarea>
+        <div style="font-size: 11px; color: var(--ids-text-muted); margin-top: 4px;">
+          Changes will immediately re-render unsent messages in the queue for this campaign.
+        </div>
+      </div>
+
+      <div style="border-top: 1px solid var(--ids-border); padding-top: var(--space-4); margin-top: var(--space-4);">
+        <div style="font-weight: 600; font-size: 13px; margin-bottom: var(--space-3); color: var(--ids-text-primary);">Pacing Safeguards</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4);">
+          <div class="form-group">
+            <label for="edit-daily-limit">Daily Message Limit *</label>
+            <input type="number" id="edit-daily-limit" class="form-input" value="{{ campaign.daily_limit }}" min="1" required>
+          </div>
+          <div class="form-group">
+            <label for="edit-batch-size">Batch Size *</label>
+            <input type="number" id="edit-batch-size" class="form-input" value="{{ campaign.batch_size }}" min="1" required>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4);">
+          <div class="form-group">
+            <label for="edit-min-delay">Min Delay (seconds) *</label>
+            <input type="number" id="edit-min-delay" class="form-input" value="{{ campaign.min_delay_seconds }}" min="1" required>
+          </div>
+          <div class="form-group">
+            <label for="edit-max-delay">Max Delay (seconds) *</label>
+            <input type="number" id="edit-max-delay" class="form-input" value="{{ campaign.max_delay_seconds }}" min="1" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="edit-batch-pause">Batch Pause (seconds) *</label>
+          <input type="number" id="edit-batch-pause" class="form-input" value="{{ campaign.batch_pause_seconds }}" min="0" required>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button onclick="closeModal('modal-edit-campaign')" class="btn btn-secondary">Cancel</button>
+      <button onclick="saveCampaignEdit(this)" id="btn-save-edit" class="btn btn-primary">Save Changes</button>
     </div>
   </div>
 </div>
 
 <script>
-async function transitionCampaignStatus(newStatus) {
+let currentEnrollTab = 'quick';
+
+function setEnrollTab(tab) {
+  currentEnrollTab = tab;
+  const btnQuick = document.getElementById('tab-enroll-quick');
+  const btnDir = document.getElementById('tab-enroll-dir');
+  const paneQuick = document.getElementById('pane-enroll-quick');
+  const paneDir = document.getElementById('pane-enroll-dir');
+
+  if (tab === 'quick') {
+    btnQuick.className = 'btn btn-sm btn-primary';
+    btnDir.className = 'btn btn-sm btn-outline';
+    paneQuick.style.display = 'block';
+    paneDir.style.display = 'none';
+  } else {
+    btnQuick.className = 'btn btn-sm btn-outline';
+    btnDir.className = 'btn btn-sm btn-primary';
+    paneQuick.style.display = 'none';
+    paneDir.style.display = 'block';
+  }
+}
+
+function openEditModal() {
+  const errBox = document.getElementById('edit-campaign-error');
+  if (errBox) errBox.style.display = 'none';
+  openModal('modal-edit-campaign');
+}
+
+function insertVariable(varName) {
+  const textarea = document.getElementById('edit-template');
+  if (!textarea) return;
+  const start = textarea.selectionStart;
+  const end = textarea.selectionEnd;
+  const text = textarea.value;
+  textarea.value = text.substring(0, start) + varName + text.substring(end);
+  textarea.focus();
+  textarea.selectionStart = textarea.selectionEnd = start + varName.length;
+}
+
+async function saveCampaignEdit(btn) {
+  const errBox = document.getElementById('edit-campaign-error');
+  errBox.style.display = 'none';
+
+  const name = document.getElementById('edit-name').value.trim();
+  const template = document.getElementById('edit-template').value.trim();
+  const dailyLimit = parseInt(document.getElementById('edit-daily-limit').value, 10);
+  const minDelay = parseInt(document.getElementById('edit-min-delay').value, 10);
+  const maxDelay = parseInt(document.getElementById('edit-max-delay').value, 10);
+  const batchSize = parseInt(document.getElementById('edit-batch-size').value, 10);
+  const batchPause = parseInt(document.getElementById('edit-batch-pause').value, 10);
+
+  if (!name) {
+    errBox.textContent = 'Campaign name is required.';
+    errBox.style.display = 'block';
+    return;
+  }
+  if (!template) {
+    errBox.textContent = 'Message template cannot be empty.';
+    errBox.style.display = 'block';
+    return;
+  }
+  if (minDelay > maxDelay) {
+    errBox.textContent = 'Min delay cannot exceed max delay.';
+    errBox.style.display = 'block';
+    return;
+  }
+
+  setButtonLoading(btn, true, 'Saving Changes...');
+
+  try {
+    const res = await apiFetch('/api/v1/campaigns/{{ campaign.id }}', {
+      method: 'PATCH',
+      body: {
+        name: name,
+        message_template: template,
+        daily_limit: dailyLimit,
+        min_delay_seconds: minDelay,
+        max_delay_seconds: maxDelay,
+        batch_size: batchSize,
+        batch_pause_seconds: batchPause
+      }
+    });
+    const result = await res.json();
+    if (res.ok && result.success) {
+      window.location.reload();
+    } else {
+      errBox.textContent = result.error?.message || result.detail || 'Failed to update campaign.';
+      errBox.style.display = 'block';
+      setButtonLoading(btn, false);
+    }
+  } catch (err) {
+    errBox.textContent = `Network error: ${err.message}`;
+    errBox.style.display = 'block';
+    setButtonLoading(btn, false);
+  }
+}
+
+async function transitionCampaignStatus(newStatus, btn) {
   const alertBox = document.getElementById('detail-alert');
   alertBox.style.display = 'none';
+  if (btn) setButtonLoading(btn, true, 'Updating Status...');
 
   try {
     const res = await apiFetch('/api/v1/campaigns/{{ campaign.id }}/transition', {
@@ -218,34 +432,78 @@ async function transitionCampaignStatus(newStatus) {
       }
       alertBox.textContent = errorMsg;
       alertBox.style.display = 'block';
+      if (btn) setButtonLoading(btn, false);
     }
   } catch (err) {
     alertBox.className = 'alert alert-danger';
     alertBox.textContent = `Network error transitioning campaign: ${err.message}`;
     alertBox.style.display = 'block';
+    if (btn) setButtonLoading(btn, false);
   }
 }
 
 function openEnrollModal() {
+  const errBox = document.getElementById('enroll-error');
+  if (errBox) errBox.style.display = 'none';
   openModal('modal-enroll-contact');
 }
 
-async function enrollContact() {
-  const select = document.getElementById('enroll-contact-select');
-  const contactId = select ? select.value : '';
+function alertCannotRemoveRunning() {
+  const alertBox = document.getElementById('detail-alert');
+  alertBox.className = 'alert alert-warning';
+  alertBox.textContent = 'Contacts cannot be removed while campaign is RUNNING. Please click "Pause Campaign" first to remove contacts.';
+  alertBox.style.display = 'block';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function enrollContact(btn) {
   const errBox = document.getElementById('enroll-error');
   errBox.style.display = 'none';
 
-  if (!contactId) {
-    errBox.textContent = 'Please choose a contact to enroll.';
-    errBox.style.display = 'block';
-    return;
+  let payload = {};
+
+  if (currentEnrollTab === 'quick') {
+    const phone = document.getElementById('enroll-phone').value.trim();
+    const name = document.getElementById('enroll-name').value.trim();
+    const company = document.getElementById('enroll-company').value.trim();
+
+    if (!phone) {
+      errBox.textContent = 'Please enter a valid phone number (in E.164 format, e.g. +201012345678).';
+      errBox.style.display = 'block';
+      return;
+    }
+    if (!phone.startsWith('+')) {
+      errBox.textContent = 'Phone number must start with + and include country code (e.g. +201012345678).';
+      errBox.style.display = 'block';
+      return;
+    }
+
+    payload = {
+      phone_e164: phone,
+      name: name || undefined,
+      company: company || undefined
+    };
+  } else {
+    const select = document.getElementById('enroll-contact-select');
+    const contactId = select ? select.value : '';
+
+    if (!contactId) {
+      errBox.textContent = 'Please choose a contact from the dropdown to enroll.';
+      errBox.style.display = 'block';
+      return;
+    }
+
+    payload = {
+      contact_ids: [parseInt(contactId, 10)]
+    };
   }
+
+  if (btn) setButtonLoading(btn, true, 'Adding Contact...');
 
   try {
     const res = await apiFetch('/api/v1/campaigns/{{ campaign.id }}/contacts', {
       method: 'POST',
-      body: { contact_ids: [parseInt(contactId, 10)] }
+      body: payload
     });
     const result = await res.json();
     if (res.ok && result.success) {
@@ -258,17 +516,21 @@ async function enrollContact() {
       }
       errBox.textContent = errorMsg;
       errBox.style.display = 'block';
+      if (btn) setButtonLoading(btn, false);
     }
   } catch (err) {
     errBox.textContent = `Enrollment error: ${err.message}`;
     errBox.style.display = 'block';
+    if (btn) setButtonLoading(btn, false);
   }
 }
 
-async function removeContact(contactId) {
-  if (!confirm('Are you sure you want to remove this contact from the campaign draft?')) return;
+async function removeContact(contactId, btn) {
+  if (!confirm('Are you sure you want to remove this contact from the campaign?')) return;
   const alertBox = document.getElementById('detail-alert');
   alertBox.style.display = 'none';
+
+  if (btn) setButtonLoading(btn, true, 'Removing...');
 
   try {
     const res = await apiFetch(`/api/v1/campaigns/{{ campaign.id }}/contacts/${contactId}`, {
@@ -281,11 +543,13 @@ async function removeContact(contactId) {
       alertBox.className = 'alert alert-danger';
       alertBox.textContent = result.error?.message || result.detail || 'Failed to remove contact.';
       alertBox.style.display = 'block';
+      if (btn) setButtonLoading(btn, false);
     }
   } catch (err) {
     alertBox.className = 'alert alert-danger';
     alertBox.textContent = `Network error removing contact: ${err.message}`;
     alertBox.style.display = 'block';
+    if (btn) setButtonLoading(btn, false);
   }
 }
 </script>

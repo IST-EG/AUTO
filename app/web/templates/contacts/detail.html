@@ -116,8 +116,7 @@ document.getElementById('edit-contact-form').addEventListener('submit', async fu
   const btn = document.getElementById('btn-save-contact');
   alertBox.style.display = 'none';
 
-  btn.disabled = true;
-  btn.textContent = 'Saving...';
+  setButtonLoading(btn, true, 'Saving Changes...');
 
   try {
     const res = await apiFetch('/api/v1/contacts/{{ contact.id }}', {
@@ -137,15 +136,13 @@ document.getElementById('edit-contact-form').addEventListener('submit', async fu
       alertBox.className = 'alert alert-danger';
       alertBox.textContent = result.error?.message || result.detail || 'Failed to update contact.';
       alertBox.style.display = 'block';
-      btn.disabled = false;
-      btn.textContent = 'Save Changes';
+      setButtonLoading(btn, false);
     }
   } catch (err) {
     alertBox.className = 'alert alert-danger';
     alertBox.textContent = 'Network or server error updating contact.';
     alertBox.style.display = 'block';
-    btn.disabled = false;
-    btn.textContent = 'Save Changes';
+    setButtonLoading(btn, false);
   }
 });
 </script>

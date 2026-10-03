@@ -149,8 +149,7 @@ document.getElementById('new-version-form').addEventListener('submit', async fun
 
   const body = document.getElementById('new-version-body').value.trim();
 
-  btn.disabled = true;
-  btn.textContent = 'Publishing...';
+  setButtonLoading(btn, true, 'Publishing New Version...');
 
   try {
     const res = await apiFetch('/api/v1/templates/{{ template.id }}/versions', {
@@ -165,15 +164,13 @@ document.getElementById('new-version-form').addEventListener('submit', async fun
       alertBox.className = 'alert alert-danger';
       alertBox.textContent = result.error?.message || result.detail || 'Failed to append version.';
       alertBox.style.display = 'block';
-      btn.disabled = false;
-      btn.textContent = 'Publish New Version';
+      setButtonLoading(btn, false);
     }
   } catch (err) {
     alertBox.className = 'alert alert-danger';
     alertBox.textContent = 'Network or server error appending version.';
     alertBox.style.display = 'block';
-    btn.disabled = false;
-    btn.textContent = 'Publish New Version';
+    setButtonLoading(btn, false);
   }
 });
 </script>
