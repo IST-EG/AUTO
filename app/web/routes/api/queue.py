@@ -147,3 +147,22 @@ def resolve_unknown_outcome(
         request=req
     )
     return APIResponse.ok(data)
+
+
+@router.post(
+    "/{message_id}/retry",
+    response_model=APIResponse[QueueMessageDetailDTO],
+    dependencies=[Depends(require_operator), Depends(verify_csrf)],
+)
+def retry_message(
+    message_id: int = Path(..., ge=1, description="Message ID to retry"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Manually retries a message in FAILED, RETRY_PENDING, or SKIPPED state.
+    Resets status to QUEUED and clears retry attempt counters.
+    """
+    data = WebQueueService.retry_message(db=db, user=current_user, message_id=message_id)
+    return APIResponse.ok(data)
+

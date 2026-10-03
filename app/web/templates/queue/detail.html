@@ -67,7 +67,12 @@
       </p>
     </div>
 
-    <div class="page-header-actions">
+    <div class="page-header-actions" style="display: flex; gap: var(--space-2); align-items: center;">
+      {% if message.status in ['FAILED', 'RETRY_PENDING', 'SKIPPED'] %}
+      <button onclick="retryQueueMessage({{ message.id }}, this)" class="btn btn-primary btn-sm" id="btn-retry-message">
+        ↺ Retry Message
+      </button>
+      {% endif %}
       {% if message.can_cancel %}
       <button onclick="openCancelModal()" class="btn btn-danger btn-sm">Cancel Message</button>
       {% endif %}
@@ -318,6 +323,41 @@ async function confirmResolve() {
   } catch (err) {
     errBox.textContent = `Error: ${err.message}`;
     errBox.style.display = 'block';
+  }
+}
+
+async function retryQueueMessage(msgId, btn) {
+  setButtonLoading(btn, true, 'Retrying Message...');
+  const alertBox = document.getElementById('queue-detail-alert');
+  if (alertBox) alertBox.style.display = 'none';
+
+  try {
+    const res = await apiFetch(`/api/v1/queue/${msgId}/retry`, {
+      method: 'POST'
+    });
+    const result = await res.json();
+    if (res.ok && result.success) {
+      if (alertBox) {
+        alertBox.className = 'alert alert-success';
+        alertBox.textContent = 'Message re-queued for dispatch successfully! Reloading...';
+        alertBox.style.display = 'block';
+      }
+      setTimeout(() => { window.location.reload(); }, 1000);
+    } else {
+      if (alertBox) {
+        alertBox.className = 'alert alert-danger';
+        alertBox.textContent = result.error?.message || result.detail || 'Failed to retry message.';
+        alertBox.style.display = 'block';
+      }
+      setButtonLoading(btn, false);
+    }
+  } catch (err) {
+    if (alertBox) {
+      alertBox.className = 'alert alert-danger';
+      alertBox.textContent = `Network error: ${err.message}`;
+      alertBox.style.display = 'block';
+    }
+    setButtonLoading(btn, false);
   }
 }
 </script>

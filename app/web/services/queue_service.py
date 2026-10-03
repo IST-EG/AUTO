@@ -480,3 +480,55 @@ class WebQueueService:
         db.commit()
 
         return cls.get_message_detail(db, user, message_id)
+
+    @classmethod
+    def retry_message(cls, db: Session, user: User, message_id: int) -> QueueMessageDetailDTO:
+        """
+        Manually resets a FAILED, RETRY_PENDING, or SKIPPED message back to QUEUED state.
+        Resets attempt counts, clears error details, and marks campaign contact QUEUED.
+        """
+        message = db.query(Message).filter(Message.id == message_id).first()
+        if not message:
+            raise HTTPException(status_code=404, detail=f"Message {message_id} not found")
+
+        if message.status not in ("FAILED", "RETRY_PENDING", "SKIPPED"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot retry message {message_id} in status '{message.status}'. Only FAILED, RETRY_PENDING, or SKIPPED messages can be retried."
+            )
+
+        now = datetime.now(timezone.utc)
+        message.status = QueueState.QUEUED
+        message.attempt_count = 0
+        message.last_error = None
+        message.error_type = None
+        message.next_retry_at = None
+        message.locked_at = None
+        message.locked_by = None
+        message.updated_at = now
+
+        if message.campaign_contact_id:
+            from app.models.campaign_contact import CampaignContact
+            cc = db.query(CampaignContact).filter(CampaignContact.id == message.campaign_contact_id).first()
+            if cc:
+                cc.status = "QUEUED"
+                cc.exclusion_reason = None
+                cc.enqueued_at = now
+
+        audit = AuditLog(
+            event_type="QUEUE_MESSAGE_RETRY_REQUESTED",
+            campaign_id=message.campaign_id,
+            contact_id=message.contact_id,
+            message_id=message.id,
+            status=QueueState.QUEUED,
+            result=json.dumps({
+                "operator": user.username,
+                "action": "MANUAL_RETRY",
+                "timestamp": now.isoformat(),
+            })
+        )
+        db.add(audit)
+        db.commit()
+
+        return cls.get_message_detail(db, user, message_id)
+
