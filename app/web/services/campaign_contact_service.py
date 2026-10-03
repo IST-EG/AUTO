@@ -2,6 +2,7 @@
 Web service for Campaign-Contact membership and eligibility.
 """
 
+from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -9,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.models.campaign import Campaign
 from app.models.contact import Contact
 from app.models.campaign_contact import CampaignContact
+from app.contacts.validator import PhoneValidator
 from app.campaigns.contact_manager import CampaignContactManager
 from app.campaigns.exceptions import CampaignContactError
 from app.web.schemas.campaigns import (
@@ -92,17 +94,28 @@ class CampaignContactService:
             # Find or create contact
             c = db.query(Contact).filter(Contact.phone_e164 == clean_phone).first()
             if not c:
+                validator = PhoneValidator()
+                try:
+                    country_code = validator.parse_country_code(clean_phone)
+                except Exception:
+                    country_code = "20"
                 c = Contact(
                     name=name.strip() if name and name.strip() else clean_phone,
                     phone_e164=clean_phone,
+                    country_code=country_code,
                     company=company.strip() if company and company.strip() else None,
                     contact_status="active",
-                    consent_status="opted_in"
+                    consent_status="opted_in",
+                    opted_in_at=datetime.now(timezone.utc)
                 )
                 db.add(c)
-                db.commit()
-                db.refresh(c)
-            if c not in resolved_contacts:
+                try:
+                    db.commit()
+                    db.refresh(c)
+                except Exception:
+                    db.rollback()
+                    c = db.query(Contact).filter(Contact.phone_e164 == clean_phone).first()
+            if c and c not in resolved_contacts:
                 resolved_contacts.append(c)
 
         if not resolved_contacts:
