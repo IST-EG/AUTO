@@ -94,16 +94,15 @@ class CampaignContactManager:
         if not cc:
             return False
             
-        if cc.status in ("SENT", "FAILED"):
-            raise CampaignContactError("Cannot remove contact that has already been processed.")
+        if cc.status == "SENT":
+            raise CampaignContactError("Cannot remove contact that has already been successfully sent.")
 
-        # Clean up any unsent messages for this campaign contact in queue
+        # Clean up any messages for this campaign contact in queue
         from app.models.message import Message
-        unsent_messages = self.db.query(Message).filter(
-            Message.campaign_contact_id == cc.id,
-            Message.status.in_(("PENDING", "QUEUED"))
+        messages = self.db.query(Message).filter(
+            Message.campaign_contact_id == cc.id
         ).all()
-        for msg in unsent_messages:
+        for msg in messages:
             self.db.delete(msg)
             
         self.db.delete(cc)

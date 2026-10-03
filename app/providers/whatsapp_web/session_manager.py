@@ -116,7 +116,7 @@ class WhatsAppSessionManager:
             return False
 
         # Verify chat pane remains visible
-        if not self.browser.is_chat_ready(timeout=2.0):
+        if not self.browser.is_chat_ready(timeout=5.0):
             logger.warning("Chat list pane not visible during health check.")
             return False
 

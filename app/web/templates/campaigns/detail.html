@@ -29,19 +29,24 @@
       </p>
     </div>
 
-    <!-- State Transition Action Buttons -->
+    <!-- State Transition & Runner Action Buttons -->
     <div class="page-header-actions" style="display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap;">
+      <button onclick="startDispatchRunner(this)" class="btn btn-primary btn-sm" id="btn-dispatch-runner" title="Set campaign to RUNNING and start the worker daemon immediately">
+        🚀 Start Dispatch & Runner
+      </button>
+
       {% if campaign.status == 'DRAFT' %}
-        <button onclick="transitionCampaignStatus('RUNNING', this)" class="btn btn-success btn-sm">▶ Start Campaign (RUNNING)</button>
+        <button onclick="transitionCampaignStatus('RUNNING', this)" class="btn btn-success btn-sm">▶ Set RUNNING</button>
         <button onclick="openEditModal()" class="btn btn-secondary btn-sm">✏️ Edit Settings & Template</button>
         <button onclick="transitionCampaignStatus('CANCELLED', this)" class="btn btn-danger btn-sm">Cancel Campaign</button>
       {% elif campaign.status == 'RUNNING' %}
         <button onclick="transitionCampaignStatus('PAUSED', this)" class="btn btn-secondary btn-sm">⏸ Pause Campaign</button>
+        <button onclick="openEditModal()" class="btn btn-secondary btn-sm">✏️ Edit Settings & Template</button>
         <button onclick="transitionCampaignStatus('COMPLETED', this)" class="btn btn-success btn-sm">✓ Mark Completed</button>
         <button onclick="transitionCampaignStatus('CANCELLED', this)" class="btn btn-danger btn-sm">Cancel Campaign</button>
       {% elif campaign.status == 'PAUSED' %}
         <button onclick="transitionCampaignStatus('RUNNING', this)" class="btn btn-success btn-sm">▶ Resume (RUNNING)</button>
-        <button onclick="openEditModal()" class="btn btn-primary btn-sm">✏️ Edit Settings & Template</button>
+        <button onclick="openEditModal()" class="btn btn-secondary btn-sm">✏️ Edit Settings & Template</button>
         <button onclick="transitionCampaignStatus('DRAFT', this)" class="btn btn-secondary btn-sm">↺ Reset to DRAFT</button>
         <button onclick="transitionCampaignStatus('CANCELLED', this)" class="btn btn-danger btn-sm">Cancel Campaign</button>
       {% endif %}
@@ -54,7 +59,7 @@
     <div class="incident-banner-content">
       <div class="incident-banner-title">Operational Domain Transition Notice</div>
       <div class="incident-banner-desc">
-        Transitioning campaign status to <code>RUNNING</code> is strictly a domain state transition. Execution is conducted by the Production Runner daemon supervised via the <a href="/dashboard">Dashboard</a>.
+        You can launch execution directly using <strong>🚀 Start Dispatch & Runner</strong> above, or control the background runner daemon via the <a href="/dashboard">Dashboard</a>.
       </div>
     </div>
   </div>
@@ -67,20 +72,16 @@
     <div class="card">
       <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
         <div class="card-title">Message Template</div>
-        {% if campaign.status in ['DRAFT', 'PAUSED'] %}
+        {% if campaign.status in ['DRAFT', 'PAUSED', 'RUNNING'] %}
         <button onclick="openEditModal()" class="btn btn-secondary btn-sm" style="padding: 3px 10px;">✏️ Edit Message</button>
-        {% elif campaign.status == 'RUNNING' %}
-        <span class="sidebar-badge" title="Pause campaign first to edit template">Running (Read Only)</span>
         {% else %}
         <span class="sidebar-badge">Snapshot Frozen</span>
         {% endif %}
       </div>
       <div id="campaign-template-preview" style="background-color: var(--ids-canvas); border: 1px solid var(--ids-border); border-radius: var(--radius-sm); padding: var(--space-4); font-family: var(--font-mono); font-size: 13px; white-space: pre-wrap; line-height: 1.6;">{{ campaign.message_template }}</div>
       <div style="margin-top: var(--space-3); font-size: 11px; color: var(--ids-text-muted);">
-        {% if campaign.status in ['DRAFT', 'PAUSED'] %}
-          <span>💡 You can edit this template directly anytime while campaign is <strong>DRAFT</strong> or <strong>PAUSED</strong>.</span>
-        {% elif campaign.status == 'RUNNING' %}
-          <span style="color: var(--ids-warning);">⚠️ Campaign is actively running. To edit the template text, click <strong>Pause Campaign</strong> above first.</span>
+        {% if campaign.status in ['DRAFT', 'PAUSED', 'RUNNING'] %}
+          <span>💡 You can edit this template directly anytime. Edits apply immediately to all unsent messages in this campaign.</span>
         {% else %}
           Inline Custom Template snapshot frozen.
         {% endif %}
@@ -91,7 +92,7 @@
     <div class="card">
       <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
         <div class="card-title">Pacing Safeguards</div>
-        {% if campaign.status in ['DRAFT', 'PAUSED'] %}
+        {% if campaign.status in ['DRAFT', 'PAUSED', 'RUNNING'] %}
         <button onclick="openEditModal()" class="btn btn-outline btn-sm" style="padding: 2px 8px; font-size: 11px;">Edit</button>
         {% endif %}
       </div>
@@ -121,13 +122,11 @@
     <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--space-2);">
       <div>
         <div class="card-title">Campaign Contacts Breakdown</div>
-        <div class="card-subtitle">Audience enrollment, dispatch status, and eligibility exclusion reasons</div>
+        <div class="card-subtitle">Audience enrollment, dispatch status, phone numbers, and actions</div>
       </div>
-      {% if campaign.status in ['DRAFT', 'PAUSED', 'RUNNING'] %}
       <div style="display: flex; gap: var(--space-2);">
-        <button onclick="openEnrollModal()" class="btn btn-primary btn-sm">+ Add / Enroll Contact</button>
+        <button onclick="openEnrollModal()" class="btn btn-primary btn-sm">+ Add / Enroll Contacts</button>
       </div>
-      {% endif %}
     </div>
 
     <div class="table-scroll-container">
@@ -139,10 +138,8 @@
             <th>Phone (E.164)</th>
             <th>Company</th>
             <th>Status</th>
-            <th>Eligibility Note</th>
-            {% if campaign.status in ['DRAFT', 'PAUSED', 'RUNNING'] %}
-            <th style="text-align: right;">Action</th>
-            {% endif %}
+            <th>Eligibility / Error Note</th>
+            <th style="text-align: right;">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -151,25 +148,25 @@
             <tr>
               <td class="table-cell-mono table-cell-muted">#{{ c.id }}</td>
               <td style="font-weight: 600;">{{ c.name }}</td>
-              <td class="table-cell-mono">{{ c.phone_e164 }}</td>
+              <td class="table-cell-mono" style="font-weight: 500;">{{ c.phone_e164 }}</td>
               <td class="table-cell-muted">{{ c.company or '—' }}</td>
               <td>
                 <span class="status-pill status-{{ c.status.lower() }}">{{ c.status }}</span>
               </td>
               <td class="table-cell-muted" style="font-size: 12px;">{{ c.eligibility_reason or 'Eligible' }}</td>
-              {% if campaign.status in ['DRAFT', 'PAUSED', 'RUNNING'] %}
-              <td class="table-cell-right">
-                {% if c.status in ['PENDING', 'QUEUED', 'ELIGIBLE', 'EXCLUDED'] %}
-                  {% if campaign.status == 'RUNNING' %}
-                    <button onclick="alertCannotRemoveRunning()" class="btn btn-outline btn-sm" style="padding: 2px 8px; font-size: 11px; opacity: 0.75;" title="Pause campaign first to remove contacts">Remove</button>
-                  {% else %}
-                    <button onclick="removeContact({{ c.contact_id }}, this)" class="btn btn-danger btn-sm" style="padding: 2px 8px; font-size: 11px;">Remove</button>
-                  {% endif %}
+              <td class="table-cell-right" style="white-space: nowrap;">
+                <button onclick="openEditContactModal({{ c.contact_id }}, '{{ c.name|escape }}', '{{ c.phone_e164 }}', '{{ (c.company or '')|escape }}')" class="btn btn-outline btn-sm" style="padding: 2px 8px; font-size: 11px;" title="Edit phone number, name or company">✏️ Edit</button>
+
+                {% if c.status in ['FAILED', 'RETRY_PENDING'] %}
+                  <button onclick="retryContact({{ c.contact_id }}, this)" class="btn btn-primary btn-sm" style="padding: 2px 8px; font-size: 11px;" title="Reset contact and retry message">↺ Retry</button>
+                {% endif %}
+
+                {% if c.status != 'SENT' %}
+                  <button onclick="removeContact({{ c.contact_id }}, this)" class="btn btn-danger btn-sm" style="padding: 2px 8px; font-size: 11px;" title="Remove contact from campaign">Remove</button>
                 {% else %}
-                  <span class="table-cell-muted" style="font-size: 11px;">{{ c.status }}</span>
+                  <span class="table-cell-muted" style="font-size: 11px; margin-left: 4px;">✓ Sent</span>
                 {% endif %}
               </td>
-              {% endif %}
             </tr>
             {% endfor %}
           {% else %}
@@ -178,9 +175,7 @@
                 <div class="empty-state" style="padding: var(--space-6) var(--space-4);">
                   <div class="empty-state-title" style="font-size: 14px;">No contacts enrolled in this campaign</div>
                   <div class="empty-state-desc" style="font-size: 12px; margin-bottom: var(--space-3);">Add phone numbers directly or enroll contacts from the directory.</div>
-                  {% if campaign.status in ['DRAFT', 'PAUSED', 'RUNNING'] %}
-                  <button onclick="openEnrollModal()" class="btn btn-primary btn-sm">+ Add / Enroll Contact</button>
-                  {% endif %}
+                  <button onclick="openEnrollModal()" class="btn btn-primary btn-sm">+ Add / Enroll Contacts</button>
                 </div>
               </td>
             </tr>
@@ -196,30 +191,32 @@
 <div id="modal-enroll-contact" class="modal-backdrop">
   <div class="modal-dialog">
     <div class="modal-header">
-      <h3 class="modal-title">Add / Enroll Contact to Campaign</h3>
+      <h3 class="modal-title">Add Contacts to Campaign</h3>
       <button onclick="closeModal('modal-enroll-contact')" class="modal-close-btn">&times;</button>
     </div>
     <div class="modal-body">
       <div id="enroll-error" class="alert alert-danger" style="display: none;"></div>
 
       <div style="display: flex; gap: var(--space-2); margin-bottom: var(--space-4); border-bottom: 1px solid var(--ids-border); padding-bottom: var(--space-3);">
-        <button type="button" id="tab-enroll-quick" onclick="setEnrollTab('quick')" class="btn btn-sm btn-primary" style="flex: 1;">Quick Add Phone Number</button>
+        <button type="button" id="tab-enroll-quick" onclick="setEnrollTab('quick')" class="btn btn-sm btn-primary" style="flex: 1;">Add Phone Numbers</button>
         <button type="button" id="tab-enroll-dir" onclick="setEnrollTab('dir')" class="btn btn-sm btn-outline" style="flex: 1;">Select from Directory</button>
       </div>
 
       <!-- Quick Add Form -->
       <div id="pane-enroll-quick">
         <div class="form-group">
-          <label for="enroll-phone">Phone Number (E.164 Format) *</label>
-          <input type="text" id="enroll-phone" class="form-input" placeholder="e.g. +201012345678" style="font-family: var(--font-mono);">
-          <div style="font-size: 11px; color: var(--ids-text-muted); margin-top: 4px;">Must start with <code>+</code> followed by country code (e.g. +20 for Egypt).</div>
+          <label for="enroll-phone">Phone Number(s) *</label>
+          <textarea id="enroll-phone" class="form-input" rows="3" placeholder="e.g. +201012345678&#10;or paste multiple numbers separated by new lines or commas" style="font-family: var(--font-mono); font-size: 13px;"></textarea>
+          <div style="font-size: 11px; color: var(--ids-text-muted); margin-top: 4px;">
+            Supports single or multiple Egyptian/international numbers (e.g. <code>+201012345678</code> or <code>01012345678</code>). Local numbers will be automatically converted to E.164.
+          </div>
         </div>
         <div class="form-group">
-          <label for="enroll-name">Contact Name</label>
+          <label for="enroll-name">Contact Name (Optional for single number)</label>
           <input type="text" id="enroll-name" class="form-input" placeholder="e.g. Ahmed Mohamed">
         </div>
         <div class="form-group">
-          <label for="enroll-company">Company</label>
+          <label for="enroll-company">Company (Optional)</label>
           <input type="text" id="enroll-company" class="form-input" placeholder="e.g. Acme Inc.">
         </div>
       </div>
@@ -239,7 +236,38 @@
     </div>
     <div class="modal-footer">
       <button onclick="closeModal('modal-enroll-contact')" class="btn btn-secondary">Cancel</button>
-      <button onclick="enrollContact(this)" id="btn-submit-enroll" class="btn btn-primary">Add Contact</button>
+      <button onclick="enrollContact(this)" id="btn-submit-enroll" class="btn btn-primary">Add Contact(s)</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: EDIT CONTACT -->
+<div id="modal-edit-contact" class="modal-backdrop">
+  <div class="modal-dialog" style="max-width: 500px;">
+    <div class="modal-header">
+      <h3 class="modal-title">Edit Contact Details & Phone</h3>
+      <button onclick="closeModal('modal-edit-contact')" class="modal-close-btn">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="edit-contact-error" class="alert alert-danger" style="display: none;"></div>
+      <input type="hidden" id="edit-contact-id">
+      <div class="form-group">
+        <label for="edit-contact-name">Contact Name *</label>
+        <input type="text" id="edit-contact-name" class="form-input" required>
+      </div>
+      <div class="form-group">
+        <label for="edit-contact-phone">Phone Number (E.164 Format) *</label>
+        <input type="text" id="edit-contact-phone" class="form-input" placeholder="e.g. +201012345678" style="font-family: var(--font-mono);" required>
+        <div style="font-size: 11px; color: var(--ids-text-muted); margin-top: 4px;">Must start with <code>+</code> followed by country code (e.g. +20 for Egypt).</div>
+      </div>
+      <div class="form-group">
+        <label for="edit-contact-company">Company</label>
+        <input type="text" id="edit-contact-company" class="form-input" placeholder="e.g. Acme Inc.">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button onclick="closeModal('modal-edit-contact')" class="btn btn-secondary">Cancel</button>
+      <button onclick="saveContactEdit(this)" id="btn-save-contact-edit" class="btn btn-primary">Save Changes</button>
     </div>
   </div>
 </div>
@@ -271,7 +299,7 @@
         </div>
         <textarea id="edit-template" class="form-input" rows="5" style="font-family: var(--font-mono); font-size: 13px;" required>{{ campaign.message_template }}</textarea>
         <div style="font-size: 11px; color: var(--ids-text-muted); margin-top: 4px;">
-          Changes will immediately re-render unsent messages in the queue for this campaign.
+          Changes will immediately re-render all unsent messages in the queue for this campaign.
         </div>
       </div>
 
@@ -442,18 +470,40 @@ async function transitionCampaignStatus(newStatus, btn) {
   }
 }
 
+async function startDispatchRunner(btn) {
+  const alertBox = document.getElementById('detail-alert');
+  alertBox.style.display = 'none';
+  setButtonLoading(btn, true, 'Starting Dispatch & Runner...');
+
+  try {
+    const res = await apiFetch('/api/v1/runner/start', {
+      method: 'POST',
+      body: { campaign_id: {{ campaign.id }} }
+    });
+    const result = await res.json();
+    if (res.ok && result.success) {
+      alertBox.className = 'alert alert-success';
+      alertBox.textContent = 'Runner engaged successfully! Dispatch is running.';
+      alertBox.style.display = 'block';
+      setTimeout(() => { window.location.reload(); }, 1200);
+    } else {
+      alertBox.className = 'alert alert-danger';
+      alertBox.textContent = result.error?.message || result.detail || 'Failed to start runner dispatch.';
+      alertBox.style.display = 'block';
+      setButtonLoading(btn, false);
+    }
+  } catch (err) {
+    alertBox.className = 'alert alert-danger';
+    alertBox.textContent = `Error starting dispatch runner: ${err.message}`;
+    alertBox.style.display = 'block';
+    setButtonLoading(btn, false);
+  }
+}
+
 function openEnrollModal() {
   const errBox = document.getElementById('enroll-error');
   if (errBox) errBox.style.display = 'none';
   openModal('modal-enroll-contact');
-}
-
-function alertCannotRemoveRunning() {
-  const alertBox = document.getElementById('detail-alert');
-  alertBox.className = 'alert alert-warning';
-  alertBox.textContent = 'Contacts cannot be removed while campaign is RUNNING. Please click "Pause Campaign" first to remove contacts.';
-  alertBox.style.display = 'block';
-  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 async function enrollContact(btn) {
@@ -468,12 +518,7 @@ async function enrollContact(btn) {
     const company = document.getElementById('enroll-company').value.trim();
 
     if (!phone) {
-      errBox.textContent = 'Please enter a valid phone number (in E.164 format, e.g. +201012345678).';
-      errBox.style.display = 'block';
-      return;
-    }
-    if (!phone.startsWith('+')) {
-      errBox.textContent = 'Phone number must start with + and include country code (e.g. +201012345678).';
+      errBox.textContent = 'Please enter at least one phone number.';
       errBox.style.display = 'block';
       return;
     }
@@ -498,7 +543,7 @@ async function enrollContact(btn) {
     };
   }
 
-  if (btn) setButtonLoading(btn, true, 'Adding Contact...');
+  if (btn) setButtonLoading(btn, true, 'Adding Contact(s)...');
 
   try {
     const res = await apiFetch('/api/v1/campaigns/{{ campaign.id }}/contacts', {
@@ -521,6 +566,91 @@ async function enrollContact(btn) {
   } catch (err) {
     errBox.textContent = `Enrollment error: ${err.message}`;
     errBox.style.display = 'block';
+    if (btn) setButtonLoading(btn, false);
+  }
+}
+
+function openEditContactModal(contactId, name, phone, company) {
+  const errBox = document.getElementById('edit-contact-error');
+  if (errBox) errBox.style.display = 'none';
+
+  document.getElementById('edit-contact-id').value = contactId;
+  document.getElementById('edit-contact-name').value = name || '';
+  document.getElementById('edit-contact-phone').value = phone || '';
+  document.getElementById('edit-contact-company').value = company || '';
+
+  openModal('modal-edit-contact');
+}
+
+async function saveContactEdit(btn) {
+  const errBox = document.getElementById('edit-contact-error');
+  errBox.style.display = 'none';
+
+  const contactId = document.getElementById('edit-contact-id').value;
+  const name = document.getElementById('edit-contact-name').value.trim();
+  const phone = document.getElementById('edit-contact-phone').value.trim();
+  const company = document.getElementById('edit-contact-company').value.trim();
+
+  if (!name) {
+    errBox.textContent = 'Contact name is required.';
+    errBox.style.display = 'block';
+    return;
+  }
+  if (!phone) {
+    errBox.textContent = 'Phone number is required.';
+    errBox.style.display = 'block';
+    return;
+  }
+
+  setButtonLoading(btn, true, 'Saving Contact...');
+
+  try {
+    const res = await apiFetch(`/api/v1/contacts/${contactId}`, {
+      method: 'PATCH',
+      body: {
+        name: name,
+        phone_number: phone,
+        company: company || null
+      }
+    });
+    const result = await res.json();
+    if (res.ok && result.success) {
+      window.location.reload();
+    } else {
+      errBox.textContent = result.error?.message || result.detail || 'Failed to update contact.';
+      errBox.style.display = 'block';
+      setButtonLoading(btn, false);
+    }
+  } catch (err) {
+    errBox.textContent = `Error saving contact: ${err.message}`;
+    errBox.style.display = 'block';
+    setButtonLoading(btn, false);
+  }
+}
+
+async function retryContact(contactId, btn) {
+  const alertBox = document.getElementById('detail-alert');
+  alertBox.style.display = 'none';
+
+  if (btn) setButtonLoading(btn, true, 'Retrying...');
+
+  try {
+    const res = await apiFetch(`/api/v1/campaigns/{{ campaign.id }}/contacts/${contactId}/retry`, {
+      method: 'POST'
+    });
+    const result = await res.json();
+    if (res.ok && result.success) {
+      window.location.reload();
+    } else {
+      alertBox.className = 'alert alert-danger';
+      alertBox.textContent = result.error?.message || result.detail || 'Failed to retry contact.';
+      alertBox.style.display = 'block';
+      if (btn) setButtonLoading(btn, false);
+    }
+  } catch (err) {
+    alertBox.className = 'alert alert-danger';
+    alertBox.textContent = `Network error retrying contact: ${err.message}`;
+    alertBox.style.display = 'block';
     if (btn) setButtonLoading(btn, false);
   }
 }

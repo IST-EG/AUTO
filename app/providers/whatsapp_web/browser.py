@@ -88,6 +88,7 @@ class WhatsAppBrowser:
             options.add_argument("--disable-dev-shm-usage")
             options.add_argument("--disable-gpu")
             options.add_argument("--disable-extensions")
+            options.add_argument("--disable-session-crashed-bubble")
             options.add_argument("--remote-debugging-port=0")
 
             if self.headless:

@@ -167,8 +167,27 @@ def remove_campaign_contact(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Removes a contact from a campaign. Allowed only when campaign is in DRAFT state."""
+    """Removes a contact from a campaign."""
     data = CampaignContactService.remove_contact(
         db, campaign_id=campaign_id, contact_id=contact_id, username=current_user.username
     )
     return APIResponse.ok(data)
+
+
+@router.post(
+    "/{campaign_id}/contacts/{contact_id}/retry",
+    response_model=APIResponse[bool],
+    dependencies=[Depends(require_operator), Depends(verify_csrf)],
+)
+def retry_campaign_contact(
+    campaign_id: int = Path(..., ge=1),
+    contact_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Resets a failed/retry contact back to ELIGIBLE state."""
+    data = CampaignContactService.retry_contact(
+        db, campaign_id=campaign_id, contact_id=contact_id, username=current_user.username
+    )
+    return APIResponse.ok(data)
+

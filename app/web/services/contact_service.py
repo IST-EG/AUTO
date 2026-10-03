@@ -175,6 +175,25 @@ class ContactService:
 
         if req.name is not None:
             contact.name = req.name.strip()
+        if req.phone_number is not None and req.phone_number.strip():
+            clean_phone = req.phone_number.strip()
+            validator = PhoneValidator()
+            if not validator.validate_e164(clean_phone):
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"Invalid phone number '{clean_phone}'. Must be in international E.164 format starting with '+' (e.g. +201012345678)."
+                )
+            dup = db.query(Contact).filter(Contact.phone_e164 == clean_phone, Contact.id != contact.id).first()
+            if dup:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Phone number '{clean_phone}' is already registered for contact #{dup.id} ({dup.name})."
+                )
+            contact.phone_e164 = clean_phone
+            try:
+                contact.country_code = validator.parse_country_code(clean_phone)
+            except Exception:
+                pass
         if req.company is not None:
             contact.company = req.company.strip() or None
         if req.city is not None:

@@ -90,33 +90,42 @@ class CampaignContactService:
             resolved_contacts = db.query(Contact).filter(Contact.id.in_(contact_ids)).all()
 
         if phone_e164:
-            clean_phone = phone_e164.strip()
-            # Find or create contact
-            c = db.query(Contact).filter(Contact.phone_e164 == clean_phone).first()
-            if not c:
-                validator = PhoneValidator()
-                try:
-                    country_code = validator.parse_country_code(clean_phone)
-                except Exception:
-                    country_code = "20"
-                c = Contact(
-                    name=name.strip() if name and name.strip() else clean_phone,
-                    phone_e164=clean_phone,
-                    country_code=country_code,
-                    company=company.strip() if company and company.strip() else None,
-                    contact_status="active",
-                    consent_status="opted_in",
-                    opted_in_at=datetime.now(timezone.utc)
-                )
-                db.add(c)
-                try:
-                    db.commit()
-                    db.refresh(c)
-                except Exception:
-                    db.rollback()
-                    c = db.query(Contact).filter(Contact.phone_e164 == clean_phone).first()
-            if c and c not in resolved_contacts:
-                resolved_contacts.append(c)
+            import re
+            validator = PhoneValidator()
+            raw_phones = [p.strip() for p in re.split(r'[\r\n,;]+', phone_e164) if p.strip()]
+            for raw_p in raw_phones:
+                clean_phone = raw_p
+                if not clean_phone.startswith('+') and clean_phone.startswith('20'):
+                    clean_phone = '+' + clean_phone
+                elif not clean_phone.startswith('+') and clean_phone.startswith('01'):
+                    clean_phone = '+2' + clean_phone
+                elif not clean_phone.startswith('+'):
+                    clean_phone = '+' + clean_phone
+
+                c = db.query(Contact).filter(Contact.phone_e164 == clean_phone).first()
+                if not c:
+                    try:
+                        country_code = validator.parse_country_code(clean_phone)
+                    except Exception:
+                        country_code = "20"
+                    c = Contact(
+                        name=name.strip() if name and name.strip() else clean_phone,
+                        phone_e164=clean_phone,
+                        country_code=country_code,
+                        company=company.strip() if company and company.strip() else None,
+                        contact_status="active",
+                        consent_status="opted_in",
+                        opted_in_at=datetime.now(timezone.utc)
+                    )
+                    db.add(c)
+                    try:
+                        db.commit()
+                        db.refresh(c)
+                    except Exception:
+                        db.rollback()
+                        c = db.query(Contact).filter(Contact.phone_e164 == clean_phone).first()
+                if c and c not in resolved_contacts:
+                    resolved_contacts.append(c)
 
         if not resolved_contacts:
             raise HTTPException(
@@ -148,7 +157,7 @@ class CampaignContactService:
     ) -> bool:
         """
         Removes a contact from a campaign.
-        Enforces strict safety rule: removals are only permitted in DRAFT state.
+        Allowed in DRAFT, PAUSED, and RUNNING states (unless message has already been SENT).
         """
         campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
         if not campaign:
@@ -177,3 +186,48 @@ class CampaignContactService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=str(exc)
             )
+
+    @staticmethod
+    def retry_contact(
+        db: Session,
+        campaign_id: int,
+        contact_id: int,
+        username: Optional[str] = None
+    ) -> bool:
+        """
+        Resets a failed or retry-pending contact back to ELIGIBLE state and re-enqueues it.
+        """
+        campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+        if not campaign:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Campaign {campaign_id} not found."
+            )
+
+        from app.models.campaign_contact import CampaignContact
+        from app.models.message import Message
+        cc = db.query(CampaignContact).filter(
+            CampaignContact.campaign_id == campaign_id,
+            CampaignContact.contact_id == contact_id
+        ).first()
+        if not cc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Contact {contact_id} not found in Campaign {campaign_id}."
+            )
+
+        # Remove previous failed or retry messages
+        msgs = db.query(Message).filter(Message.campaign_contact_id == cc.id).all()
+        for m in msgs:
+            db.delete(m)
+
+        cc.status = "ELIGIBLE"
+        cc.exclusion_reason = None
+        cc.sent_at = None
+        db.commit()
+
+        if campaign.status == "RUNNING":
+            from app.web.services.runner_control_service import RunnerControlService
+            RunnerControlService.enqueue_eligible_contacts(db, campaign)
+
+        return True

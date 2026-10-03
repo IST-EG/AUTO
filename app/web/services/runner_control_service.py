@@ -132,7 +132,7 @@ class RunnerControlService:
                         sequence_number=1,
                         initial_state=QueueState.QUEUED
                     )
-                    cc.status = "ENQUEUED"
+                    cc.status = "QUEUED"
                     cc.enqueued_at = now_utc
                     enqueued_count += 1
 
@@ -260,11 +260,16 @@ class RunnerControlService:
         if not campaign:
             return False, f"Target Campaign {campaign_id} was not found.", None
 
-        # 2. Verify campaign state is RUNNING
-        if campaign.status != "RUNNING":
+        # 2. Verify campaign state is RUNNING or resume from PAUSED
+        if campaign.status == "PAUSED":
+            campaign.status = "RUNNING"
+            campaign.updated_at = datetime.now(timezone.utc)
+            db.commit()
+            logger.info(f"Campaign {campaign_id} automatically resumed to RUNNING for runner start.")
+        elif campaign.status != "RUNNING":
             return False, (
                 f"Campaign {campaign_id} is not in RUNNING state (current: {campaign.status}). "
-                "Only campaigns in RUNNING state may be processed by a runner."
+                "Only campaigns in RUNNING or PAUSED state may be processed by a runner."
             ), None
 
         # 3. Check Emergency Stop
@@ -273,7 +278,14 @@ class RunnerControlService:
             return False, "Emergency stop is currently ACTIVE. Production runner cannot be started.", None
 
         # Automatically enqueue any ELIGIBLE contacts before starting dispatch
-        cls.enqueue_eligible_contacts(db, campaign)
+        try:
+            cls.enqueue_eligible_contacts(db, campaign)
+        except Exception as e:
+            logger.warning(f"Error during pre-dispatch contact enqueue: {e}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
 
         now = datetime.now(timezone.utc)
         is_remote = (

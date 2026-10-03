@@ -53,6 +53,7 @@ class ContactCreateRequest(BaseModel):
 
 class ContactUpdateRequest(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1)
+    phone_number: Optional[str] = None
     company: Optional[str] = None
     city: Optional[str] = None
     consent_status: Optional[str] = Field(default=None, pattern="^(pending|opted_in|opted_out)$")

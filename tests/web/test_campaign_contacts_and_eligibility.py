@@ -397,3 +397,54 @@ def test_campaign_contact_enrollment_security_and_csrf(client, web_session, crea
     assert r_badcsrf.status_code == 403
 
 
+def test_contact_edit_phone_and_retry_endpoint(client, web_session, create_user):
+    operator = create_user("op_edit_test", UserRole.OPERATOR)
+    cookies, headers = _auth(web_session, operator)
+
+    campaign = Campaign(name="Edit & Retry Campaign", message_template="Hello {{name}}", status="PAUSED")
+    c = Contact(name="Original Name", phone_e164="+201088880001", country_code="20", consent_status="opted_in", contact_status="active")
+    web_session.add_all([campaign, c])
+    web_session.commit()
+
+    # 1. Enroll contact
+    r_add = client.post(
+        f"/api/v1/campaigns/{campaign.id}/contacts",
+        json={"contact_id": c.id},
+        cookies=cookies,
+        headers=headers
+    )
+    assert r_add.status_code == 200
+
+    # 2. Edit contact phone number via PATCH /api/v1/contacts/{id}
+    r_edit = client.patch(
+        f"/api/v1/contacts/{c.id}",
+        json={"name": "Updated Name", "phone_number": "+201088880002", "company": "New Corp"},
+        cookies=cookies,
+        headers=headers
+    )
+    assert r_edit.status_code == 200
+    updated = r_edit.json()["data"]
+    assert updated["name"] == "Updated Name"
+    assert updated["phone_e164"] == "+201088880002"
+    assert updated["company"] == "New Corp"
+
+    # 3. Simulate failure state on campaign contact
+    from app.models.campaign_contact import CampaignContact
+    cc = web_session.query(CampaignContact).filter(CampaignContact.campaign_id == campaign.id, CampaignContact.contact_id == c.id).first()
+    cc.status = "FAILED"
+    web_session.commit()
+
+    # 4. Retry contact via POST /api/v1/campaigns/{id}/contacts/{contact_id}/retry
+    r_retry = client.post(
+        f"/api/v1/campaigns/{campaign.id}/contacts/{c.id}/retry",
+        cookies=cookies,
+        headers=headers
+    )
+    assert r_retry.status_code == 200
+    assert r_retry.json()["data"] is True
+
+    web_session.refresh(cc)
+    assert cc.status == "ELIGIBLE"
+
+
+

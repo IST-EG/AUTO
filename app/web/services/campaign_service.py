@@ -194,7 +194,7 @@ class CampaignService:
         if campaign.status not in ("DRAFT", "PAUSED"):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Cannot edit campaign in '{campaign.status}' state. Only DRAFT campaigns can be modified."
+                detail=f"Cannot edit campaign in '{campaign.status}' state. Only DRAFT or PAUSED campaigns can be modified."
             )
 
         kwargs = {}
@@ -211,6 +211,7 @@ class CampaignService:
         if req.batch_pause_seconds is not None:
             kwargs["batch_pause_seconds"] = req.batch_pause_seconds
 
+        template_changed = False
         if req.template_version_id is not None:
             ver = db.query(MessageTemplateVersion).filter(
                 MessageTemplateVersion.id == req.template_version_id
@@ -222,9 +223,11 @@ class CampaignService:
                 )
             kwargs["message_template"] = ver.body
             campaign.template_version_id = ver.id
+            template_changed = True
         elif req.message_template is not None:
             kwargs["message_template"] = req.message_template
             campaign.template_version_id = None
+            template_changed = True
 
         mgr = CampaignManager(db)
         try:
@@ -240,28 +243,28 @@ class CampaignService:
                 detail=str(exc)
             )
 
-        # If template was updated, re-render any unsent messages
-        if "message_template" in kwargs:
-            from app.models.message import Message
-            from app.models.contact import Contact
-            from app.campaigns.template_service import MessageTemplateService
-            new_tmpl = kwargs["message_template"]
-            unsent_msgs = db.query(Message).filter(
-                Message.campaign_id == campaign_id,
-                Message.status.in_(("QUEUED", "PENDING"))
-            ).all()
-            for msg in unsent_msgs:
-                contact = db.query(Contact).filter(Contact.id == msg.contact_id).first()
-                if contact:
-                    try:
-                        msg.rendered_content = MessageTemplateService.render_message(
-                            new_tmpl, contact, campaign
-                        )
-                    except Exception:
-                        pass
-            if unsent_msgs:
+        # If template changed, re-render unsent queued messages
+        if template_changed and campaign.message_template:
+            try:
+                from app.models.message import Message
+                from app.models.contact import Contact
+                from app.campaigns.template_service import MessageTemplateService
+                unsent_msgs = db.query(Message).filter(
+                    Message.campaign_id == campaign.id,
+                    Message.status.in_(("QUEUED", "PENDING"))
+                ).all()
+                for msg in unsent_msgs:
+                    contact = db.query(Contact).filter(Contact.id == msg.contact_id).first()
+                    if contact:
+                        try:
+                            msg.rendered_content = MessageTemplateService.render_message(
+                                campaign.message_template, contact, campaign
+                            )
+                        except Exception:
+                            msg.rendered_content = campaign.message_template
                 db.commit()
-
+            except Exception as e:
+                logger.warning(f"Failed to re-render unsent messages after template update: {e}")
         return CampaignService.get_campaign(db, campaign_id)
 
     @staticmethod
