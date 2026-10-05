@@ -64,11 +64,10 @@ class RateLimiter:
         Checks whether system-wide global daily quota has been reached.
         Returns: (is_quota_available: bool, sent_today: int, global_limit: Optional[int])
         """
-        setting = self.db.query(AppSetting).filter(AppSetting.key == "global_daily_limit").first()
-        if not setting or not setting.value.strip().isdigit():
+        from app.services.app_setting_service import AppSettingService
+        global_limit = AppSettingService.get_int(self.db, "global_daily_limit", -1)
+        if global_limit == -1:
             return True, 0, None
-
-        global_limit = int(setting.value.strip())
         now = at_time or datetime.now(timezone.utc)
         start_of_day = datetime(now.year, now.month, now.day, tzinfo=timezone.utc)
 

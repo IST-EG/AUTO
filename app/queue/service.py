@@ -141,7 +141,59 @@ class PersistentQueueService:
         """
         now = datetime.now(timezone.utc)
 
-        # Base query to find the best candidate message
+        # Detect PostgreSQL for atomic FOR UPDATE SKIP LOCKED execution
+        is_postgres = False
+        try:
+            bind = self.db.get_bind()
+            if bind and bind.dialect.name == "postgresql":
+                is_postgres = True
+        except Exception:
+            pass
+
+        if is_postgres:
+            # Atomic single-query claim using PostgreSQL FOR UPDATE SKIP LOCKED
+            candidate_q = self.db.query(Message).filter(
+                or_(
+                    Message.status == QueueState.QUEUED,
+                    and_(
+                        Message.status == QueueState.RETRY_PENDING,
+                        or_(Message.next_retry_at.is_(None), Message.next_retry_at <= now)
+                    )
+                ),
+                or_(
+                    Message.locked_at.is_(None),
+                    Message.locked_at < now - timedelta(seconds=lease_duration_seconds)
+                )
+            )
+
+            if campaign_id is not None:
+                candidate_q = candidate_q.filter(Message.campaign_id == campaign_id)
+            if batch_id is not None:
+                candidate_q = candidate_q.filter(Message.batch_id == batch_id)
+
+            candidate = (
+                candidate_q.order_by(
+                    case((Message.next_retry_at.is_(None), 1), else_=0),
+                    Message.next_retry_at.asc(),
+                    Message.id.asc()
+                )
+                .with_for_update(skip_locked=True)
+                .first()
+            )
+
+            if candidate:
+                candidate.status = QueueState.PROCESSING
+                candidate.locked_at = now
+                candidate.locked_by = worker_id
+                candidate.last_attempt_at = now
+                candidate.attempt_count = candidate.attempt_count + 1
+                candidate.retry_count = candidate.retry_count + 1
+                candidate.updated_at = now
+                self.db.commit()
+                return candidate
+            return None
+
+        # Base query to find the best candidate message (SQLite fallback)
         candidate_query = self.db.query(Message.id).filter(
             or_(
                 Message.status == QueueState.QUEUED,

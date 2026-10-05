@@ -43,6 +43,7 @@ class WebSettings(BaseSettings):
     WEB_SESSION_INACTIVITY_MINUTES: int = 30
     WEB_SESSION_ABSOLUTE_HOURS: int = 12
     WEB_MAX_CONCURRENT_SESSIONS: int = 2
+    WEB_SESSION_ACTIVITY_THROTTLE_SECONDS: int = 300
 
     # Brute-force & Lockout Configuration
     WEB_MAX_FAILED_LOGINS: int = 5

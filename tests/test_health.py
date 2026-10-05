@@ -13,6 +13,7 @@ from app.models.app_setting import AppSetting
 from app.models.message import Message
 from app.queue.state_machine import QueueState
 from app.runner.process_lock import ProcessLock
+from app.scheduler.emergency_stop import EmergencyStop
 
 
 def test_system_health_stopped_state(db_session):
@@ -88,21 +89,16 @@ def test_system_health_degraded_states(db_session):
 
 
 def test_system_health_emergency_stop_state(db_session):
-    setting = db_session.query(AppSetting).filter(AppSetting.key == "emergency_stop").first()
-    if not setting:
-        setting = AppSetting(key="emergency_stop", value=json.dumps({"active": True, "reason": "Severe Issue"}))
-        db_session.add(setting)
-    else:
-        setting.value = json.dumps({"active": True, "reason": "Severe Issue"})
-    db_session.commit()
+    e_stop = EmergencyStop(db_session)
+    e_stop.trigger(reason="Severe Issue")
 
     result = evaluate_system_health(db_session)
     assert result.state == HealthState.STOPPED
+    assert result.details["emergency_stop_active"] is True
     assert any("Emergency stop engaged" in r for r in result.reasons)
 
     # Reset
-    setting.value = json.dumps({"active": False})
-    db_session.commit()
+    e_stop.resume()
 
 
 def test_system_health_unhealthy_database_failure():

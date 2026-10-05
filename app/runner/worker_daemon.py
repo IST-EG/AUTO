@@ -45,6 +45,7 @@ from app.runner.whatsapp_command_handler import (
     WhatsAppCommandHandler,
     validate_worker_instance_id,
 )
+from app.scheduler.emergency_stop import EmergencyStop
 from app.cli.exit_codes import ExitCode
 from app.utils.settings import settings
 
@@ -205,6 +206,13 @@ class WorkerDaemon:
         - If desired state is STOPPED:
           Requests clean shutdown of any supervised runner child.
         """
+        # CRITICAL SAFETY CHECK: Emergency stop check
+        if EmergencyStop(db).is_active():
+            if self._is_runner_active():
+                logger.warning("Emergency stop is active. Stopping supervised runner child.")
+                self._stop_supervised_runner()
+            return
+
         desired_state_row = db.query(AppSetting).filter(AppSetting.key == "system:desired_runner_state").first()
         desired_state = desired_state_row.value if desired_state_row else "STOPPED"
 

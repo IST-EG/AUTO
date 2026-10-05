@@ -400,15 +400,16 @@ def test_api_queue_cancel_and_unknown_outcome_resolve(client, web_session, creat
     assert resp.json()["data"]["status"] == "QUEUED"
 
 
-def test_api_retry_mutation_deferred(client, web_session, create_user):
+def test_api_retry_mutation_success(client, web_session, create_user):
     """
-    Verifies that no manual retry mutation endpoint exists in Phase 7.4.
-    Retries are strictly autonomous; attempts to invoke a retry mutation must 404 or 405.
+    Verifies manual retry mutation endpoint resets a failed message to QUEUED.
     """
     c, contacts, msgs = _seed_test_data(web_session)
-    op = create_user("op_no_retry", UserRole.OPERATOR)
+    op = create_user("op_retry", UserRole.OPERATOR)
     cookies, headers = _auth(web_session, op)
     client.cookies.update(cookies)
 
+    # msgs[5] is in FAILED state (non UNKNOWN_OUTCOME)
     resp = client.post(f"/api/v1/queue/{msgs[5].id}/retry", headers=headers)
-    assert resp.status_code in (404, 405)
+    assert resp.status_code == 200
+    assert resp.json()["data"]["status"] == "QUEUED"

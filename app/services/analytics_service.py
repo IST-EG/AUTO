@@ -18,6 +18,7 @@ from app.models.message import Message
 from app.models.app_setting import AppSetting
 from app.models.audit_log import AuditLog
 from app.runner.process_lock import ProcessLock, is_pid_alive
+from app.scheduler.emergency_stop import EmergencyStop
 from app.utils.settings import settings
 
 
@@ -332,31 +333,121 @@ class AnalyticsService:
             for d, stats in sorted(timeline_dict.items())
         ]
 
-        # 5. Campaign Performance summary table
+        # 5. Campaign Performance summary table (O(1) Set-Based Optimization)
         campaigns_query = db.query(Campaign)
         if campaign_id is not None:
             campaigns_query = campaigns_query.filter(Campaign.id == campaign_id)
         all_campaigns = campaigns_query.order_by(Campaign.id.desc()).all()
 
         campaigns_summary = []
-        for camp in all_campaigns:
-            c_data = AnalyticsService.get_campaign_analytics(db, camp.id, start_date=start_date, end_date=end_date)
-            if c_data:
-                perf = c_data.get("performance", {})
-                q_bd = c_data.get("queue_breakdown", {})
+        if all_campaigns:
+            camp_ids = [c.id for c in all_campaigns]
+
+            # Set-based Query 1: Total contacts per campaign
+            contact_counts_query = (
+                db.query(CampaignContact.campaign_id, func.count(CampaignContact.id))
+                .filter(CampaignContact.campaign_id.in_(camp_ids))
+                .group_by(CampaignContact.campaign_id)
+                .all()
+            )
+            contact_count_map = {row[0]: row[1] for row in contact_counts_query}
+
+            # Set-based Query 2: Message breakdown per campaign with exact date filtering
+            msg_q = (
+                db.query(Message.campaign_id, Message.status, Message.error_type, func.count(Message.id))
+                .filter(Message.campaign_id.in_(camp_ids))
+            )
+            if start_date and end_date:
+                msg_q = msg_q.filter(
+                    or_(
+                        and_(Message.status == "SENT", Message.sent_at >= start_date, Message.sent_at < end_date),
+                        and_(Message.status == "FAILED", Message.failed_at >= start_date, Message.failed_at < end_date),
+                        and_(
+                            Message.status.in_(["QUEUED", "PROCESSING", "RETRY_PENDING", "PENDING", "CANCELLED", "SKIPPED"]),
+                            Message.created_at >= start_date,
+                            Message.created_at < end_date,
+                        ),
+                    )
+                )
+            msg_rows = msg_q.group_by(Message.campaign_id, Message.status, Message.error_type).all()
+
+            # Aggregate stats in memory in O(rows)
+            camp_msg_stats = {}
+            for c_id, st_val, et_val, c_val in msg_rows:
+                if c_id not in camp_msg_stats:
+                    camp_msg_stats[c_id] = {
+                        "queued": 0,
+                        "processing": 0,
+                        "retry_pending": 0,
+                        "confirmed_sends": 0,
+                        "failed": 0,
+                        "unknown_outcome": 0,
+                    }
+                st = (st_val or "").upper()
+                et = (et_val or "").upper()
+                stats = camp_msg_stats[c_id]
+                if st == "QUEUED":
+                    stats["queued"] += c_val
+                elif st == "PROCESSING":
+                    stats["processing"] += c_val
+                elif st == "RETRY_PENDING":
+                    stats["retry_pending"] += c_val
+                elif st == "SENT":
+                    stats["confirmed_sends"] += c_val
+                elif st == "FAILED":
+                    if et == "UNKNOWN_OUTCOME":
+                        stats["unknown_outcome"] += c_val
+                    else:
+                        stats["failed"] += c_val
+
+            for camp in all_campaigns:
+                total_con = contact_count_map.get(camp.id, 0)
+                stats = camp_msg_stats.get(camp.id, {
+                    "queued": 0,
+                    "processing": 0,
+                    "retry_pending": 0,
+                    "confirmed_sends": 0,
+                    "failed": 0,
+                    "unknown_outcome": 0,
+                })
+
+                c_sends = stats["confirmed_sends"]
+                c_fail = stats["failed"]
+                c_unk = stats["unknown_outcome"]
+                c_retry = stats["retry_pending"]
+                c_queued = stats["queued"]
+                c_proc = stats["processing"]
+
+                terminal_denominator = c_sends + c_fail + c_unk
+                if terminal_denominator > 0:
+                    confirmed_send_rate = round((c_sends / terminal_denominator) * 100.0, 2)
+                else:
+                    confirmed_send_rate = 0.0
+
+                if total_con > 0:
+                    contact_completion_percentage = round((c_sends / total_con) * 100.0, 2)
+                else:
+                    contact_completion_percentage = 0.0
+
+                total_in_queue = c_queued + c_proc + c_retry + terminal_denominator
+                if total_in_queue > 0:
+                    queue_terminal_percentage = round((terminal_denominator / total_in_queue) * 100.0, 2)
+                else:
+                    queue_terminal_percentage = 0.0
+
                 campaigns_summary.append({
                     "id": camp.id,
                     "campaign_id": camp.id,
                     "name": camp.name,
                     "status": camp.status,
-                    "total_contacts": c_data.get("total_contacts", 0),
-                    "confirmed_sends": q_bd.get("confirmed_sends", 0),
-                    "failed": q_bd.get("failed", 0),
-                    "unknown_outcome": q_bd.get("unknown_outcome", 0),
-                    "retry_pending": q_bd.get("retry_pending", 0),
-                    "confirmed_send_rate": perf.get("confirmed_send_rate", 0.0),
-                    "contact_completion_percentage": perf.get("contact_completion_percentage", 0.0),
-                    "queue_terminal_percentage": perf.get("queue_terminal_percentage", 0.0),
+                    "total_contacts": total_con,
+                    "confirmed_sends": c_sends,
+                    "failed": c_fail,
+                    "unknown_outcome": c_unk,
+                    "retry_pending": c_retry,
+                    "confirmed_send_rate": confirmed_send_rate,
+                    "contact_completion_percentage": contact_completion_percentage,
+                    "queue_terminal_percentage": queue_terminal_percentage,
                 })
 
         return {
@@ -427,16 +518,8 @@ class AnalyticsService:
         paused_count = db.query(func.count(Campaign.id)).filter(Campaign.status == "PAUSED").scalar() or 0
         circuit_breaker_status = "OPEN" if paused_count > 0 else "CLOSED"
 
-        # Emergency stop status from AppSetting
-        setting = db.query(AppSetting).filter(AppSetting.key == "emergency_stop").first()
-        e_stop_active = False
-        if setting and setting.value:
-            import json
-            try:
-                data = json.loads(setting.value)
-                e_stop_active = bool(data.get("active", False))
-            except Exception:
-                pass
+        # Emergency stop status from canonical EmergencyStop
+        e_stop_active = EmergencyStop(db).is_active()
 
         return {
             "queued_count": queued_count,
@@ -592,32 +675,26 @@ class AnalyticsService:
             elif st == "CANCELLED":
                 cancelled_count += count_val
 
-        # Stale leases count (PROCESSING messages locked before cutoff)
-        stale_query = db.query(func.count(Message.id)).filter(
-            Message.status == "PROCESSING",
-            Message.locked_at < stale_cutoff,
-        )
-        if campaign_id is not None:
-            stale_query = stale_query.filter(Message.campaign_id == campaign_id)
-        stale_leases_count = stale_query.scalar() or 0
-
-        # Throughput calculations (confirmed dispatches over 1h, 6h, 24h)
+        # Single combined query for stale leases and throughput over 1h, 6h, 24h (O(1) query)
+        from sqlalchemy import case
         one_hour_ago = now_utc - timedelta(hours=1)
         six_hours_ago = now_utc - timedelta(hours=6)
         twenty_four_hours_ago = now_utc - timedelta(hours=24)
 
-        def _count_throughput(cutoff: datetime) -> int:
-            tq = db.query(func.count(Message.id)).filter(
-                Message.status == "SENT",
-                Message.sent_at >= cutoff,
-            )
-            if campaign_id is not None:
-                tq = tq.filter(Message.campaign_id == campaign_id)
-            return tq.scalar() or 0
+        metrics_q = db.query(
+            func.sum(case((and_(Message.status == "PROCESSING", Message.locked_at < stale_cutoff), 1), else_=0)),
+            func.sum(case((and_(Message.status == "SENT", Message.sent_at >= one_hour_ago), 1), else_=0)),
+            func.sum(case((and_(Message.status == "SENT", Message.sent_at >= six_hours_ago), 1), else_=0)),
+            func.sum(case((and_(Message.status == "SENT", Message.sent_at >= twenty_four_hours_ago), 1), else_=0)),
+        )
+        if campaign_id is not None:
+            metrics_q = metrics_q.filter(Message.campaign_id == campaign_id)
+        m_row = metrics_q.first()
 
-        confirmed_1h = _count_throughput(one_hour_ago)
-        confirmed_6h = _count_throughput(six_hours_ago)
-        confirmed_24h = _count_throughput(twenty_four_hours_ago)
+        stale_leases_count = (m_row[0] or 0) if m_row else 0
+        confirmed_1h = (m_row[1] or 0) if m_row else 0
+        confirmed_6h = (m_row[2] or 0) if m_row else 0
+        confirmed_24h = (m_row[3] or 0) if m_row else 0
 
         return {
             "campaign_id": campaign_id,
@@ -784,18 +861,10 @@ class AnalyticsService:
         High-level executive dashboard combining runner state, queue backlog,
         emergency stop status, and campaign progression.
         """
-        # Emergency stop status from AppSetting
-        setting = db.query(AppSetting).filter(AppSetting.key == "emergency_stop").first()
-        e_stop_active = False
-        e_stop_reason = None
-        if setting and setting.value:
-            import json
-            try:
-                data = json.loads(setting.value)
-                e_stop_active = bool(data.get("active", False))
-                e_stop_reason = data.get("reason")
-            except Exception:
-                pass
+        # Emergency stop status from canonical EmergencyStop
+        e_stop_status = EmergencyStop.get_status(db)
+        e_stop_active = e_stop_status["active"]
+        e_stop_reason = e_stop_status["reason"]
 
         runner_analytics = AnalyticsService.get_runner_analytics(db)
         queue_analytics = AnalyticsService.get_queue_analytics(db)

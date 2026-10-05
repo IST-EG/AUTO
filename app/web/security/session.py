@@ -39,11 +39,17 @@ class SessionManager:
         self,
         inactivity_minutes: Optional[int] = None,
         absolute_hours: Optional[int] = None,
-        max_concurrent: Optional[int] = None
+        max_concurrent: Optional[int] = None,
+        activity_throttle_seconds: Optional[int] = None,
     ):
         self.inactivity_minutes = inactivity_minutes or web_settings.WEB_SESSION_INACTIVITY_MINUTES
         self.absolute_hours = absolute_hours or web_settings.WEB_SESSION_ABSOLUTE_HOURS
         self.max_concurrent = max_concurrent or web_settings.WEB_MAX_CONCURRENT_SESSIONS
+        self.activity_throttle_seconds = (
+            activity_throttle_seconds
+            if activity_throttle_seconds is not None
+            else getattr(web_settings, "WEB_SESSION_ACTIVITY_THROTTLE_SECONDS", 300)
+        )
 
     def create_session(
         self,
@@ -166,9 +172,27 @@ class SessionManager:
             db.commit()
             return None
 
-        # Update last_active_at timestamp (sliding window)
-        session_record.last_active_at = now
-        db.commit()
+        # Update last_active_at timestamp only if elapsed time >= activity_throttle_seconds.
+        #
+        # Security Tradeoff Documentation:
+        # A 300-second (5-minute) update throttle eliminates database write amplification on every
+        # authenticated read, SSR page load, and telemetry polling request.
+        # This throttle is safe and acceptable because:
+        #   1. Session revocation (logout/eviction) is never cached; UserSession is authoritatively
+        #      checked in the database on every single request.
+        #   2. Absolute expiration (expires_at) remains authoritative and checked on every request.
+        #   3. User active status (user.is_active) remains authoritative and checked on every request.
+        #   4. The effective sliding inactivity window becomes [inactivity_minutes - (throttle/60), inactivity_minutes],
+        #      guaranteeing that an idle user session still expires predictably within 25-30 minutes.
+        should_update_activity = False
+        if not last_active:
+            should_update_activity = True
+        elif (now - last_active).total_seconds() >= self.activity_throttle_seconds:
+            should_update_activity = True
+
+        if should_update_activity:
+            session_record.last_active_at = now
+            db.commit()
 
         return user, session_record
 

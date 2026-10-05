@@ -38,13 +38,36 @@ class FrequencyLimitService:
 
     def __init__(self, db: Session):
         self.db = db
+        self._cached_thresholds = None
 
     def _get_setting_int(self, key: str, default_value: int) -> int:
         """Retrieves integer setting value from AppSetting or returns default."""
-        setting = self.db.query(AppSetting).filter(AppSetting.key == key).first()
-        if setting and setting.value.strip().isdigit():
-            return int(setting.value.strip())
-        return default_value
+        from app.services.app_setting_service import AppSettingService
+        return AppSettingService.get_int(self.db, key, default_value)
+
+    def _load_thresholds(self):
+        from app.services.app_setting_service import AppSettingService
+        keys = [
+            "freq_max_messages_per_day",
+            "freq_max_messages_per_campaign",
+            "freq_max_messages_30d",
+            "freq_cooldown_hours",
+        ]
+        s_map = AppSettingService.get_many(self.db, keys)
+
+        def _parse(k, def_val):
+            val = s_map.get(k)
+            if val is not None and val.strip().isdigit():
+                return int(val.strip())
+            return def_val
+
+        self._cached_thresholds = {
+            "max_per_day": _parse("freq_max_messages_per_day", self.DEFAULT_MAX_PER_DAY),
+            "max_per_campaign": _parse("freq_max_messages_per_campaign", self.DEFAULT_MAX_PER_CAMPAIGN),
+            "max_across_30d": _parse("freq_max_messages_30d", self.DEFAULT_MAX_ACROSS_CAMPAIGNS_30D),
+            "cooldown_hours": _parse("freq_cooldown_hours", self.DEFAULT_COOLDOWN_HOURS),
+        }
+        return self._cached_thresholds
 
     def check_frequency(self, contact: Contact, campaign: Campaign, at_time: Optional[datetime] = None) -> FrequencyResult:
         """
@@ -54,11 +77,13 @@ class FrequencyLimitService:
         if now.tzinfo is None:
             now = now.replace(tzinfo=timezone.utc)
 
-        # 1. Configurable thresholds
-        max_per_day = self._get_setting_int("freq_max_messages_per_day", self.DEFAULT_MAX_PER_DAY)
-        max_per_campaign = self._get_setting_int("freq_max_messages_per_campaign", self.DEFAULT_MAX_PER_CAMPAIGN)
-        max_across_30d = self._get_setting_int("freq_max_messages_30d", self.DEFAULT_MAX_ACROSS_CAMPAIGNS_30D)
-        cooldown_hours = self._get_setting_int("freq_cooldown_hours", self.DEFAULT_COOLDOWN_HOURS)
+        # 1. Configurable thresholds (loaded in single batched query per service instance)
+        if self._cached_thresholds is None:
+            self._load_thresholds()
+        max_per_day = self._cached_thresholds["max_per_day"]
+        max_per_campaign = self._cached_thresholds["max_per_campaign"]
+        max_across_30d = self._cached_thresholds["max_across_30d"]
+        cooldown_hours = self._cached_thresholds["cooldown_hours"]
 
         # 2. Check messages sent today (last 24h rolling)
         day_start = now - timedelta(days=1)

@@ -17,6 +17,7 @@ from sqlalchemy import text
 from app.models.message import Message
 from app.models.app_setting import AppSetting
 from app.runner.process_lock import ProcessLock, is_pid_alive
+from app.scheduler.emergency_stop import EmergencyStop
 from app.services.analytics_service import AnalyticsService
 
 
@@ -66,13 +67,9 @@ def evaluate_system_health(db: Session) -> HealthResult:
     e_stop_active = False
     e_stop_reason = None
     try:
-        setting = db.query(AppSetting).filter(AppSetting.key == "emergency_stop").first()
-        if setting and setting.value:
-            import json
-            val = json.loads(setting.value)
-            if val.get("active"):
-                e_stop_active = True
-                e_stop_reason = val.get("reason", "Operator emergency stop active")
+        e_status = EmergencyStop.get_status(db)
+        e_stop_active = e_status["active"]
+        e_stop_reason = e_status["reason"] or "Operator emergency stop active"
     except Exception:
         pass
 

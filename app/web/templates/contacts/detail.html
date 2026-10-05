@@ -20,9 +20,9 @@
   <div class="page-header">
     <div>
       <div style="display: flex; align-items: center; gap: var(--space-3);">
-        <h1 class="page-header-title">{{ contact.name }}</h1>
-        <span class="status-pill status-{{ contact.consent_status }}">{{ contact.consent_status }}</span>
-        <span class="status-pill status-{{ contact.contact_status }}">{{ contact.contact_status }}</span>
+        <h1 class="page-header-title" id="contact-name-header">{{ contact.name }}</h1>
+        <span class="status-pill status-{{ contact.consent_status }}" id="contact-consent-pill">{{ contact.consent_status }}</span>
+        <span class="status-pill status-{{ contact.contact_status }}" id="contact-status-pill">{{ contact.contact_status }}</span>
       </div>
       <p class="page-header-subtitle">
         Contact ID: #{{ contact.id }} &bull; E.164: <span class="table-cell-mono">{{ contact.phone_e164 }}</span>
@@ -131,7 +131,27 @@ document.getElementById('edit-contact-form').addEventListener('submit', async fu
     });
     const result = await res.json();
     if (res.ok && result.success) {
-      window.location.reload();
+      const newName = document.getElementById('e-name').value.trim();
+      const newConsent = document.getElementById('e-consent').value;
+      const newStatus = document.getElementById('e-status').value;
+      if (newName) {
+        const headerTitle = document.getElementById('contact-name-header');
+        if (headerTitle) headerTitle.textContent = newName;
+      }
+      const consentPill = document.getElementById('contact-consent-pill');
+      if (consentPill) {
+        consentPill.className = `status-pill status-${newConsent}`;
+        consentPill.textContent = newConsent;
+      }
+      const statusPill = document.getElementById('contact-status-pill');
+      if (statusPill) {
+        statusPill.className = `status-pill status-${newStatus}`;
+        statusPill.textContent = newStatus;
+      }
+      alertBox.className = 'alert alert-success';
+      alertBox.textContent = 'Contact details saved successfully.';
+      alertBox.style.display = 'block';
+      setButtonLoading(btn, false);
     } else {
       alertBox.className = 'alert alert-danger';
       alertBox.textContent = result.error?.message || result.detail || 'Failed to update contact.';

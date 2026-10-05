@@ -50,7 +50,7 @@
       </div>
 
       {% if template.versions %}
-        <div style="display: flex; flex-direction: column; gap: var(--space-4);">
+        <div id="version-history-list" style="display: flex; flex-direction: column; gap: var(--space-4);">
           {% for v in template.versions|reverse %}
           <div class="card">
             <div class="card-header">
@@ -159,7 +159,29 @@ document.getElementById('new-version-form').addEventListener('submit', async fun
     const result = await res.json();
 
     if (res.ok && result.success) {
-      window.location.reload();
+      const v = result.data;
+      const list = document.getElementById('version-history-list');
+      if (list && v) {
+        const card = document.createElement('div');
+        card.className = 'card';
+        const cardHeader = document.createElement('div');
+        cardHeader.className = 'card-header';
+        cardHeader.innerHTML = `
+          <span style="font-weight: 700; font-size: 14px; color: var(--ids-primary);">Version ${v.version_number}</span>
+          <span style="font-size: 11px; color: var(--ids-text-muted);">${v.created_at ? v.created_at.substring(0, 16).replace('T', ' ') : ''} ${v.created_by ? 'by ' + v.created_by : ''}</span>
+        `;
+        const bodyDiv = document.createElement('div');
+        bodyDiv.style.cssText = 'background-color: var(--ids-canvas); padding: var(--space-3); border-radius: var(--radius-sm); font-family: var(--font-mono); font-size: 12px; white-space: pre-wrap; line-height: 1.5; border: 1px solid var(--ids-border);';
+        bodyDiv.textContent = v.body || '';
+        card.appendChild(cardHeader);
+        card.appendChild(bodyDiv);
+        list.prepend(card);
+      }
+      document.getElementById('new-version-body').value = '';
+      alertBox.className = 'alert alert-success';
+      alertBox.textContent = `Version ${v.version_number} published successfully.`;
+      alertBox.style.display = 'block';
+      setButtonLoading(btn, false);
     } else {
       alertBox.className = 'alert alert-danger';
       alertBox.textContent = result.error?.message || result.detail || 'Failed to append version.';

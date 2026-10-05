@@ -29,6 +29,7 @@ from app.readiness.preflight import (
 )
 from app.models.campaign import Campaign
 from app.models.app_setting import AppSetting
+from app.scheduler.emergency_stop import EmergencyStop
 from app.runner.process_lock import ProcessLock
 
 
@@ -148,13 +149,8 @@ def test_check_emergency_stop_status(db_session):
     assert res.passed is True
 
     # Active
-    setting = db_session.query(AppSetting).filter(AppSetting.key == "emergency_stop").first()
-    if not setting:
-        setting = AppSetting(key="emergency_stop", value=json.dumps({"active": True, "reason": "Test Killswitch"}))
-        db_session.add(setting)
-    else:
-        setting.value = json.dumps({"active": True, "reason": "Test Killswitch"})
-    db_session.commit()
+    e_stop = EmergencyStop(db_session)
+    e_stop.trigger(reason="Test Killswitch")
 
     res_active = check_emergency_stop_status(db_session)
     assert res_active.passed is False
@@ -162,8 +158,7 @@ def test_check_emergency_stop_status(db_session):
     assert "Killswitch" in res_active.message
 
     # Reset
-    setting.value = json.dumps({"active": False})
-    db_session.commit()
+    e_stop.resume()
 
 
 def test_check_circuit_breaker(db_session):

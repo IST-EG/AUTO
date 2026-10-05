@@ -39,12 +39,16 @@ class RunnerControlService:
 
     @classmethod
     def get_desired_state(cls, db: Session) -> Dict[str, Any]:
-        """Returns the desired runner state and target campaign from AppSetting."""
+        """Returns the desired runner state and target campaign from AppSetting via batched query."""
+        from app.services.app_setting_service import AppSettingService
         try:
-            state_row = db.query(AppSetting).filter(AppSetting.key == cls.DESIRED_STATE_SETTING_KEY).first()
-            camp_row = db.query(AppSetting).filter(AppSetting.key == cls.DESIRED_CAMPAIGN_SETTING_KEY).first()
-            state = state_row.value if state_row else "STOPPED"
-            campaign_id = int(camp_row.value) if camp_row and camp_row.value.isdigit() else None
+            settings_map = AppSettingService.get_many(
+                db, [cls.DESIRED_STATE_SETTING_KEY, cls.DESIRED_CAMPAIGN_SETTING_KEY]
+            )
+            raw_state = settings_map.get(cls.DESIRED_STATE_SETTING_KEY)
+            raw_camp = settings_map.get(cls.DESIRED_CAMPAIGN_SETTING_KEY)
+            state = raw_state if raw_state else "STOPPED"
+            campaign_id = int(raw_camp) if raw_camp and raw_camp.isdigit() else None
             return {"desired_state": state, "desired_campaign_id": campaign_id}
         except Exception:
             return {"desired_state": "STOPPED", "desired_campaign_id": None}

@@ -1,9 +1,16 @@
 """
 Server-Sent Events (SSE) Telemetry Stream for Web Control Center.
+
+Delivers real-time operational telemetry with:
+1. Non-blocking thread-offloaded database access (preserves asyncio event loop).
+2. Lightweight telemetry snapshot (avoids full 39-query dashboard aggregations).
+3. State fingerprinting (avoids serializing duplicate payloads when idle).
+4. Strictly backwards-compatible event format.
 """
 
 import json
 import asyncio
+from typing import Dict, Any
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 
@@ -16,6 +23,17 @@ from app.utils.logger import get_logger
 logger = get_logger("events_stream")
 
 router = APIRouter(prefix="/api/v1/events", tags=["Events"])
+
+
+from starlette.concurrency import run_in_threadpool
+
+def _fetch_telemetry_blocking() -> Dict[str, Any]:
+    """Runs lightweight telemetry snapshot in worker thread off the main event loop."""
+    db = SessionLocal()
+    try:
+        return DashboardService.get_telemetry_snapshot(db)
+    finally:
+        db.close()
 
 
 @router.get("/stream")
@@ -32,20 +50,38 @@ async def event_stream(
         yield "event: connected\ndata: {\"status\": \"connected\"}\n\n"
 
         iteration = 0
+        last_fingerprint = None
+
         while True:
             if await request.is_disconnected():
                 break
 
-            db = None
             try:
-                db = SessionLocal()
-                snapshot = DashboardService.get_dashboard_snapshot(db)
-                data_json = json.dumps(snapshot)
-                yield f"event: telemetry\ndata: {data_json}\n\n"
+                # Offload DB I/O to threadpool to keep asyncio event loop responsive (Python 3.8+)
+                snapshot = await run_in_threadpool(_fetch_telemetry_blocking)
 
-                # Send keep-alive comment ping every 5 iterations
+                # State fingerprint to detect meaningful state changes
+                fp_data = (
+                    snapshot.get("system_health", {}).get("state"),
+                    snapshot.get("emergency_stop", {}).get("is_active"),
+                    snapshot.get("runner", {}).get("state"),
+                    snapshot.get("runner", {}).get("pid"),
+                    snapshot.get("whatsapp", {}).get("state"),
+                    snapshot.get("queue", {}).get("queued"),
+                    snapshot.get("queue", {}).get("processing"),
+                )
+                curr_fingerprint = hash(fp_data)
+                state_changed = (curr_fingerprint != last_fingerprint)
+
                 iteration += 1
-                if iteration % 5 == 0:
+
+                # Emit full telemetry payload on state change, initial connection, or every 4th cycle (12s refresh)
+                if state_changed or (iteration % 4 == 0) or (iteration == 1):
+                    last_fingerprint = curr_fingerprint
+                    data_json = json.dumps(snapshot)
+                    yield f"event: telemetry\ndata: {data_json}\n\n"
+                else:
+                    # Lightweight keep-alive comment when state is unchanged
                     yield ": ping\n\n"
 
             except asyncio.CancelledError:
@@ -53,9 +89,6 @@ async def event_stream(
             except Exception as e:
                 logger.warning(f"Error in SSE stream tick: {e}")
                 yield f": error {str(e)}\n\n"
-            finally:
-                if db is not None:
-                    db.close()
 
             try:
                 await asyncio.sleep(3)

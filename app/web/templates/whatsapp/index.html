@@ -505,7 +505,7 @@ async function triggerHealthCheck() {
     const data = await res.json();
     if (res.ok) {
       showBanner(data.meta?.message || 'Health check requested.', false);
-      setTimeout(() => window.location.reload(), 2000);
+      pollCommandProgress();
     } else {
       showBanner(data.detail || 'Health check request failed.', true);
     }
@@ -531,7 +531,7 @@ async function submitReconnect() {
     const data = await res.json();
     if (res.ok) {
       showBanner(data.meta?.message || 'Reconnect requested.', false);
-      setTimeout(() => window.location.reload(), 2000);
+      pollCommandProgress();
     } else {
       showBanner(data.detail || 'Reconnect request failed.', true);
     }
@@ -557,7 +557,7 @@ async function submitDisconnect() {
     const data = await res.json();
     if (res.ok) {
       showBanner(data.meta?.message || 'Controlled disconnect requested.', false);
-      setTimeout(() => window.location.reload(), 2000);
+      pollCommandProgress();
     } else {
       showBanner(data.detail || 'Disconnect request failed.', true);
     }
@@ -587,7 +587,7 @@ async function submitLogout() {
     const data = await res.json();
     if (res.ok) {
       showBanner(data.meta?.message || 'Logout requested.', false);
-      setTimeout(() => window.location.reload(), 2000);
+      pollCommandProgress();
     } else {
       showBanner(data.detail || 'Logout request failed.', true);
     }
@@ -609,13 +609,37 @@ async function clearStaleCommand() {
     const data = await res.json();
     if (res.ok) {
       showBanner(data.meta?.message || 'Stale command cleared.', false);
-      setTimeout(() => window.location.reload(), 1500);
+      const banner = document.getElementById('command-feedback-banner');
+      if (banner) banner.style.display = 'none';
+      pollCommandProgress(3);
     } else {
       showBanner(data.detail || 'Failed to clear command.', true);
     }
   } catch (e) {
     showBanner('Network error clearing command.', true);
   }
+}
+
+function pollCommandProgress(maxAttempts = 8) {
+  let attempts = 0;
+  const timer = setInterval(async () => {
+    attempts++;
+    try {
+      const res = await fetch('/api/v1/whatsapp/status');
+      if (res.ok) {
+        const body = await res.json();
+        const s = body.data || body;
+        if (!s.active_command) {
+          const banner = document.getElementById('command-feedback-banner');
+          if (banner) banner.style.display = 'none';
+          clearInterval(timer);
+        }
+      }
+    } catch (err) {}
+    if (attempts >= maxAttempts) {
+      clearInterval(timer);
+    }
+  }, 1500);
 }
 </script>
 {% endblock %}

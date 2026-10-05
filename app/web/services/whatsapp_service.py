@@ -35,7 +35,7 @@ class WhatsAppWebService:
 
 
     @classmethod
-    def get_status(cls, db: Session) -> Dict[str, Any]:
+    def get_status(cls, db: Session, runner_status: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Aggregates live WhatsApp status, sanitized profile telemetry, runner coupling,
         and in-flight command lifecycle.
@@ -43,30 +43,42 @@ class WhatsAppWebService:
         now_utc = datetime.now(timezone.utc)
 
         # 1. Runner supervisor status
-        runner_status = RunnerControlService.get_status(db)
+        if runner_status is None:
+            runner_status = RunnerControlService.get_status(db)
         is_runner_active = runner_status.get("is_running", False)
         runner_pid = runner_status.get("pid")
         runner_worker_id = runner_status.get("worker_id")
         runner_campaign_id = runner_status.get("campaign_id")
 
         # 2. Worker Identity and Infrastructure Heartbeat (Authoritative source for Worker host)
-        identity_row = db.query(AppSetting).filter(AppSetting.key == cls.IDENTITY_SETTING_KEY).first()
+        from app.services.app_setting_service import AppSettingService
+        settings_map = AppSettingService.get_many(
+            db,
+            [
+                cls.IDENTITY_SETTING_KEY,
+                cls.HEARTBEAT_SETTING_KEY,
+                cls.TELEMETRY_SETTING_KEY,
+                cls.PREFLIGHT_RESULT_KEY,
+            ]
+        )
+
+        identity_val = settings_map.get(cls.IDENTITY_SETTING_KEY)
         worker_identity: Optional[Dict[str, Any]] = None
-        if identity_row and identity_row.value:
+        if identity_val:
             try:
-                worker_identity = json.loads(identity_row.value)
+                worker_identity = json.loads(identity_val)
                 for _unsafe_key in ("database_url", "password", "secret", "token", "api_key", "ssh_key"):
                     worker_identity.pop(_unsafe_key, None)
             except Exception:
                 pass
 
-        heartbeat_row = db.query(AppSetting).filter(AppSetting.key == cls.HEARTBEAT_SETTING_KEY).first()
+        heartbeat_val = settings_map.get(cls.HEARTBEAT_SETTING_KEY)
         worker_heartbeat: Optional[Dict[str, Any]] = None
         heartbeat_age: Optional[float] = None
         raw_diff: Optional[float] = None
-        if heartbeat_row and heartbeat_row.value:
+        if heartbeat_val:
             try:
-                worker_heartbeat = json.loads(heartbeat_row.value)
+                worker_heartbeat = json.loads(heartbeat_val)
                 last_seen_str = worker_heartbeat.get("last_seen")
                 if last_seen_str:
                     hb_dt = datetime.fromisoformat(last_seen_str.replace("Z", "+00:00"))
@@ -150,12 +162,12 @@ class WhatsAppWebService:
             else:
                 storage_state = "PRESENT"
 
-        # 4. Read live telemetry from worker
-        telemetry_row = db.query(AppSetting).filter(AppSetting.key == cls.TELEMETRY_SETTING_KEY).first()
+        # 4. Read live telemetry from worker (from batched settings_map)
+        telemetry_val = settings_map.get(cls.TELEMETRY_SETTING_KEY)
         telemetry: Dict[str, Any] = {}
-        if telemetry_row and telemetry_row.value:
+        if telemetry_val:
             try:
-                telemetry = json.loads(telemetry_row.value)
+                telemetry = json.loads(telemetry_val)
             except Exception:
                 pass
 
@@ -205,12 +217,12 @@ class WhatsAppWebService:
         raw_snippet = telemetry.get("diagnostic_snippet", "")
         sanitized_snippet = raw_snippet if raw_snippet else None
 
-        # Read last preflight result
-        preflight_row = db.query(AppSetting).filter(AppSetting.key == cls.PREFLIGHT_RESULT_KEY).first()
+        # Read last preflight result (from batched settings_map)
+        preflight_val = settings_map.get(cls.PREFLIGHT_RESULT_KEY)
         last_preflight_result: Optional[Dict[str, Any]] = None
-        if preflight_row and preflight_row.value:
+        if preflight_val:
             try:
-                last_preflight_result = json.loads(preflight_row.value)
+                last_preflight_result = json.loads(preflight_val)
             except Exception:
                 pass
 

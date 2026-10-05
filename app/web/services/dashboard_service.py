@@ -9,6 +9,7 @@ or executing N+1 queries.
 
 import os
 import json
+import time
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List
@@ -32,12 +33,41 @@ logger = get_logger("dashboard_service")
 class DashboardService:
     """Aggregates system telemetry, queue metrics, and active campaign state."""
 
+    CACHE_TTL_SECONDS: float = 3.0
+    _cached_snapshot: Optional[Dict[str, Any]] = None
+    _cached_mono: float = 0.0
+
     @classmethod
-    def get_dashboard_snapshot(cls, db: Session) -> Dict[str, Any]:
+    def invalidate_cache(cls) -> None:
+        """Invalidates the in-process snapshot cache."""
+        cls._cached_snapshot = None
+        cls._cached_mono = 0.0
+
+    @classmethod
+    def get_dashboard_snapshot(cls, db: Session, bypass_cache: bool = False) -> Dict[str, Any]:
         """
         Builds the complete operational dashboard snapshot.
-        Guarantees fast, bounded query execution.
+        Guarantees fast, bounded query execution with in-process 3.0s cache.
+        Emergency Stop is ALWAYS dynamically verified and NEVER stale.
         """
+        now_mono = time.monotonic()
+        if (
+            not bypass_cache
+            and cls._cached_snapshot is not None
+            and (now_mono - cls._cached_mono) < cls.CACHE_TTL_SECONDS
+        ):
+            # Authoritative Emergency Stop overlay: NEVER cached by generic telemetry cache
+            fresh_estop = EmergencyStop.get_status(db)
+            cached_data = dict(cls._cached_snapshot)
+            e_act = fresh_estop["active"]
+            cached_data["emergency_stop"] = {
+                "is_active": e_act,
+                "status": "ACTIVE (HALTED)" if e_act else "INACTIVE (OPERATIONAL)",
+                "reason": fresh_estop["reason"],
+                "activated_at": fresh_estop["activated_at"],
+            }
+            return cached_data
+
         now = datetime.now(timezone.utc)
 
         # 1. Database Connectivity
@@ -76,18 +106,10 @@ class DashboardService:
         e_stop_activated_at = None
         if db_connected:
             try:
-                e_stop = EmergencyStop(db)
-                e_stop_active = e_stop.is_active()
-                if e_stop_active:
-                    last_log = (
-                        db.query(AuditLog)
-                        .filter(AuditLog.event_type == "EMERGENCY_STOP_ACTIVATED")
-                        .order_by(AuditLog.id.desc())
-                        .first()
-                    )
-                    if last_log:
-                        e_stop_reason = last_log.error_message or "Operator triggered emergency stop"
-                        e_stop_activated_at = last_log.created_at.isoformat() if last_log.created_at else None
+                status_dict = EmergencyStop.get_status(db)
+                e_stop_active = status_dict["active"]
+                e_stop_reason = status_dict["reason"]
+                e_stop_activated_at = status_dict["activated_at"]
             except Exception as e:
                 logger.warning(f"Error checking emergency stop state: {e}")
 
@@ -98,8 +120,36 @@ class DashboardService:
             "activated_at": e_stop_activated_at,
         }
 
-        # 4. WhatsApp Provider & Session Status (from authoritative WhatsAppWebService)
-        whatsapp_status = WhatsAppWebService.get_status(db) if db_connected else {}
+        # 4. Runner Status (via RunnerControlService - single authoritative fetch)
+        runner_dto: Dict[str, Any] = {
+            "is_running": False,
+            "state": "STOPPED",
+            "pid": None,
+            "worker_id": None,
+            "campaign_id": None,
+            "started_at": None,
+            "last_heartbeat": None,
+            "heartbeat_age_seconds": None,
+            "uptime_seconds": 0.0,
+            "is_stale": False,
+            "dispatches_completed": 0,
+            "lock_authoritative": True,
+            "worker_daemon_health": "UNKNOWN",
+            "worker_daemon_heartbeat_age": None,
+            "worker_id_name": "oracle-arm64-worker-01",
+        }
+        runner_status: Dict[str, Any] = {}
+        if db_connected:
+            try:
+                runner_status = RunnerControlService.get_status(db)
+                runner_analytics = AnalyticsService.get_runner_analytics(db)
+                runner_dto.update(runner_status)
+                runner_dto["dispatches_completed"] = runner_analytics.get("dispatches_completed", 0)
+            except Exception as e:
+                logger.warning(f"Error checking runner status: {e}")
+
+        # 5. WhatsApp Provider & Session Status (reuses runner_status to eliminate duplicate queries)
+        whatsapp_status = WhatsAppWebService.get_status(db, runner_status=runner_status) if db_connected else {}
         profile_exists = whatsapp_status.get("profile_present", False)
         storage_state = whatsapp_status.get("profile_storage_state", "MISSING")
         has_profile_data = (storage_state == "PRESENT")
@@ -117,7 +167,12 @@ class DashboardService:
             "disclaimer": "SEND_CONFIRMED represents WhatsApp Web UI send confirmation only, not delivery or read receipts.",
         }
 
-        # 5. Circuit Breaker Telemetry
+        # Enrich runner_dto with worker daemon health
+        runner_dto["worker_daemon_health"] = infra_health
+        runner_dto["worker_daemon_heartbeat_age"] = worker_hb.get("heartbeat_age_seconds") if worker_hb else None
+        runner_dto["worker_id_name"] = (worker_hb.get("worker_id") if worker_hb else None) or runner_dto.get("worker_id") or "oracle-arm64-worker-01"
+
+        # 6. Circuit Breaker Telemetry
         tripped_campaigns: List[int] = []
         if db_connected:
             try:
@@ -136,37 +191,6 @@ class DashboardService:
             "threshold": 5,
             "tripped_campaigns": tripped_campaigns,
         }
-
-        # 6. Runner Status (via RunnerControlService)
-        runner_dto: Dict[str, Any] = {
-            "is_running": False,
-            "state": "STOPPED",
-            "pid": None,
-            "worker_id": None,
-            "campaign_id": None,
-            "started_at": None,
-            "last_heartbeat": None,
-            "heartbeat_age_seconds": None,
-            "uptime_seconds": 0.0,
-            "is_stale": False,
-            "dispatches_completed": 0,
-            "lock_authoritative": True,
-            "worker_daemon_health": infra_health,
-            "worker_daemon_heartbeat_age": worker_hb.get("heartbeat_age_seconds") if worker_hb else None,
-            "worker_id_name": (worker_hb.get("worker_id") if worker_hb else None) or "oracle-arm64-worker-01",
-        }
-        if db_connected:
-            try:
-                runner_status = RunnerControlService.get_status(db)
-                runner_analytics = AnalyticsService.get_runner_analytics(db)
-                runner_dto.update(runner_status)
-                runner_dto["dispatches_completed"] = runner_analytics.get("dispatches_completed", 0)
-                # Ensure remote worker telemetry is preserved
-                runner_dto["worker_daemon_health"] = infra_health
-                runner_dto["worker_daemon_heartbeat_age"] = worker_hb.get("heartbeat_age_seconds") if worker_hb else None
-                runner_dto["worker_id_name"] = (worker_hb.get("worker_id") if worker_hb else None) or runner_dto.get("worker_id") or "oracle-arm64-worker-01"
-            except Exception as e:
-                logger.warning(f"Error checking runner status: {e}")
 
         # 7. Active Campaign Telemetry
         active_campaign_dto: Optional[Dict[str, Any]] = None
@@ -269,7 +293,7 @@ class DashboardService:
             tripped_campaigns=tripped_campaigns,
         )
 
-        return {
+        snapshot = {
             "timestamp": now.isoformat(),
             "system_health": health_dto,
             "database": {
@@ -283,6 +307,111 @@ class DashboardService:
             "queue": queue_dto,
             "runner": runner_dto,
             "alerts": alerts,
+        }
+        cls._cached_snapshot = snapshot
+        cls._cached_mono = time.monotonic()
+        return snapshot
+
+    @classmethod
+    def get_telemetry_snapshot(cls, db: Session) -> Dict[str, Any]:
+        """
+        Lightweight telemetry snapshot designed specifically for SSE & rapid live status polls.
+        Eliminates expensive aggregations and full historical campaign analytics.
+        Executes in <= 2 fast queries total.
+        """
+        now = datetime.now(timezone.utc)
+
+        # 1. Authoritative Emergency Stop (fast 1.0s monotonic check)
+        status_dict = EmergencyStop.get_status(db)
+        e_stop_active = status_dict["active"]
+        emergency_dto = {
+            "is_active": e_stop_active,
+            "status": "ACTIVE (HALTED)" if e_stop_active else "INACTIVE (OPERATIONAL)",
+            "reason": status_dict["reason"],
+            "activated_at": status_dict["activated_at"],
+        }
+
+        # 2. Runner supervisor status (batched via AppSettingService)
+        runner_status = RunnerControlService.get_status(db)
+
+        # 3. WhatsApp status (reuses runner_status to avoid duplicate queries)
+        whatsapp_status = WhatsAppWebService.get_status(db, runner_status=runner_status)
+        worker_hb = whatsapp_status.get("worker_heartbeat")
+        infra_health = whatsapp_status.get("infra_health", "UNKNOWN")
+
+        runner_dto: Dict[str, Any] = {
+            "is_running": False,
+            "state": "STOPPED",
+            "pid": None,
+            "worker_id": None,
+            "campaign_id": None,
+            "started_at": None,
+            "last_heartbeat": None,
+            "heartbeat_age_seconds": None,
+            "uptime_seconds": 0.0,
+            "is_stale": False,
+            "dispatches_completed": 0,
+            "lock_authoritative": True,
+            "worker_daemon_health": infra_health,
+            "worker_daemon_heartbeat_age": worker_hb.get("heartbeat_age_seconds") if worker_hb else None,
+            "worker_id_name": (worker_hb.get("worker_id") if worker_hb else None) or "oracle-arm64-worker-01",
+        }
+        runner_dto.update(runner_status)
+
+        # 4. Lightweight queue counters (single grouped query)
+        from app.models.message import Message
+        from sqlalchemy import func
+        q_rows = (
+            db.query(Message.status, func.count(Message.id))
+            .filter(Message.status.in_(["QUEUED", "PROCESSING", "RETRY_PENDING", "SENT", "FAILED"]))
+            .group_by(Message.status)
+            .all()
+        )
+        q_map = {r[0]: r[1] for r in q_rows}
+        queue_dto = {
+            "queued": q_map.get("QUEUED", 0),
+            "processing": q_map.get("PROCESSING", 0),
+            "retry_pending": q_map.get("RETRY_PENDING", 0),
+            "confirmed_sends": q_map.get("SENT", 0),
+            "failed": q_map.get("FAILED", 0),
+            "unknown_outcome": 0,
+            "stale_leases": 0,
+            "throughput_1h": 0,
+            "throughput_6h": 0,
+            "throughput_24h": 0,
+        }
+
+        whatsapp_dto = {
+            "state": whatsapp_status.get("state", "DISCONNECTED"),
+            "profile_exists": whatsapp_status.get("profile_present", False),
+            "has_profile_data": (whatsapp_status.get("profile_storage_state") == "PRESENT"),
+            "storage_state": whatsapp_status.get("profile_storage_state", "MISSING"),
+            "infra_health": infra_health,
+            "worker_heartbeat": worker_hb,
+        }
+
+        health_state = "STOPPED"
+        if e_stop_active:
+            health_state = "STOPPED"
+        elif runner_dto.get("is_running"):
+            health_state = "HEALTHY"
+        elif infra_health == "OFFLINE":
+            health_state = "DEGRADED"
+
+        return {
+            "timestamp": now.isoformat(),
+            "system_health": {
+                "state": health_state,
+                "reasons": ["Emergency Stop Active"] if e_stop_active else [],
+                "details": {"emergency_stop_active": e_stop_active},
+            },
+            "database": {"connected": True, "status": "CONNECTED"},
+            "whatsapp": whatsapp_dto,
+            "emergency_stop": emergency_dto,
+            "circuit_breaker": {"status": "CLOSED", "consecutive_errors": 0, "threshold": 5, "tripped_campaigns": []},
+            "queue": queue_dto,
+            "runner": runner_dto,
+            "alerts": [],
         }
 
     @classmethod

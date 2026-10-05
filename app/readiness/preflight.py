@@ -19,6 +19,7 @@ from app.utils.settings import settings
 from app.runner.process_lock import ProcessLock, is_pid_alive
 from app.models.app_setting import AppSetting
 from app.models.campaign import Campaign
+from app.scheduler.emergency_stop import EmergencyStop
 
 
 class CheckResult:
@@ -286,21 +287,15 @@ def check_process_lock_singularity(db: Session) -> CheckResult:
 
 def check_emergency_stop_status(db: Session) -> CheckResult:
     """Verifies emergency stop is inactive."""
-    setting = db.query(AppSetting).filter(AppSetting.key == "emergency_stop").first()
-    if setting and setting.value:
-        import json
-        try:
-            val = json.loads(setting.value)
-            if val.get("active"):
-                reason = val.get("reason", "Operator emergency stop active")
-                return CheckResult(
-                    "Emergency Stop",
-                    False,
-                    f"Emergency stop is active: {reason}. Run 'outreach emergency-resume'.",
-                    ExitCode.EMERGENCY_STOP_ACTIVE,
-                )
-        except Exception:
-            pass
+    status = EmergencyStop.get_status(db)
+    if status["active"]:
+        reason = status["reason"] or "Operator emergency stop active"
+        return CheckResult(
+            "Emergency Stop",
+            False,
+            f"Emergency stop is active: {reason}. Run 'outreach emergency-resume'.",
+            ExitCode.EMERGENCY_STOP_ACTIVE,
+        )
     return CheckResult("Emergency Stop", True, "Emergency stop is inactive", ExitCode.SUCCESS)
 
 

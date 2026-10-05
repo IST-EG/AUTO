@@ -21,7 +21,7 @@
   <div class="page-header">
     <div>
       <div style="display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap;">
-        <h1 class="page-header-title">{{ campaign.name }}</h1>
+        <h1 class="page-header-title" id="campaign-name-header">{{ campaign.name }}</h1>
         <span class="status-pill status-{{ campaign.status.lower() }}" id="campaign-status-pill">{{ campaign.status }}</span>
       </div>
       <p class="page-header-subtitle">
@@ -99,19 +99,19 @@
       <div style="font-size: 13px;">
         <div class="subsystem-row">
           <span style="color: var(--ids-text-secondary);">Daily Limit:</span>
-          <strong class="table-cell-mono">{{ campaign.daily_limit }} msgs/day</strong>
+          <strong id="pacing-daily-limit" class="table-cell-mono">{{ campaign.daily_limit }} msgs/day</strong>
         </div>
         <div class="subsystem-row">
           <span style="color: var(--ids-text-secondary);">Delay Range:</span>
-          <strong class="table-cell-mono">{{ campaign.min_delay_seconds }} - {{ campaign.max_delay_seconds }}s</strong>
+          <strong id="pacing-delay-range" class="table-cell-mono">{{ campaign.min_delay_seconds }} - {{ campaign.max_delay_seconds }}s</strong>
         </div>
         <div class="subsystem-row">
           <span style="color: var(--ids-text-secondary);">Batch Size:</span>
-          <strong class="table-cell-mono">{{ campaign.batch_size }} msgs</strong>
+          <strong id="pacing-batch-size" class="table-cell-mono">{{ campaign.batch_size }} msgs</strong>
         </div>
         <div class="subsystem-row">
           <span style="color: var(--ids-text-secondary);">Batch Pause:</span>
-          <strong class="table-cell-mono">{{ campaign.batch_pause_seconds }}s</strong>
+          <strong id="pacing-batch-pause" class="table-cell-mono">{{ campaign.batch_pause_seconds }}s</strong>
         </div>
       </div>
     </div>
@@ -145,15 +145,15 @@
         <tbody>
           {% if contacts %}
             {% for c in contacts %}
-            <tr>
+            <tr id="campaign-contact-row-{{ c.contact_id }}">
               <td class="table-cell-mono table-cell-muted">#{{ c.id }}</td>
-              <td style="font-weight: 600;">{{ c.name }}</td>
-              <td class="table-cell-mono" style="font-weight: 500;">{{ c.phone_e164 }}</td>
-              <td class="table-cell-muted">{{ c.company or '—' }}</td>
-              <td>
+              <td class="col-contact-name" style="font-weight: 600;">{{ c.name }}</td>
+              <td class="col-contact-phone table-cell-mono" style="font-weight: 500;">{{ c.phone_e164 }}</td>
+              <td class="col-contact-company table-cell-muted">{{ c.company or '—' }}</td>
+              <td class="col-contact-status">
                 <span class="status-pill status-{{ c.status.lower() }}">{{ c.status }}</span>
               </td>
-              <td class="table-cell-muted" style="font-size: 12px;">{{ c.eligibility_reason or 'Eligible' }}</td>
+              <td class="col-contact-reason table-cell-muted" style="font-size: 12px;">{{ c.eligibility_reason or 'Eligible' }}</td>
               <td class="table-cell-right" style="white-space: nowrap;">
                 <button onclick="openEditContactModal({{ c.contact_id }}, '{{ c.name|escape }}', '{{ c.phone_e164 }}', '{{ (c.company or '')|escape }}')" class="btn btn-outline btn-sm" style="padding: 2px 8px; font-size: 11px;" title="Edit phone number, name or company">✏️ Edit</button>
 
@@ -425,7 +425,27 @@ async function saveCampaignEdit(btn) {
     });
     const result = await res.json();
     if (res.ok && result.success) {
-      window.location.reload();
+      const headerTitle = document.getElementById('campaign-name-header');
+      if (headerTitle) headerTitle.textContent = name;
+      const tplPreview = document.getElementById('campaign-template-preview');
+      if (tplPreview) tplPreview.textContent = template;
+      const pDaily = document.getElementById('pacing-daily-limit');
+      if (pDaily) pDaily.textContent = `${dailyLimit} msgs/day`;
+      const pDelay = document.getElementById('pacing-delay-range');
+      if (pDelay) pDelay.textContent = `${minDelay} - ${maxDelay}s`;
+      const pBatch = document.getElementById('pacing-batch-size');
+      if (pBatch) pBatch.textContent = `${batchSize} msgs`;
+      const pPause = document.getElementById('pacing-batch-pause');
+      if (pPause) pPause.textContent = `${batchPause}s`;
+
+      closeModal('modal-edit-campaign');
+      const alertBox = document.getElementById('detail-alert');
+      if (alertBox) {
+        alertBox.className = 'alert alert-success';
+        alertBox.textContent = 'Campaign settings and template updated successfully.';
+        alertBox.style.display = 'block';
+      }
+      setButtonLoading(btn, false);
     } else {
       errBox.textContent = result.error?.message || result.detail || 'Failed to update campaign.';
       errBox.style.display = 'block';
@@ -615,7 +635,23 @@ async function saveContactEdit(btn) {
     });
     const result = await res.json();
     if (res.ok && result.success) {
-      window.location.reload();
+      const row = document.getElementById(`campaign-contact-row-${contactId}`);
+      if (row) {
+        const colName = row.querySelector('.col-contact-name');
+        if (colName) colName.textContent = name;
+        const colPhone = row.querySelector('.col-contact-phone');
+        if (colPhone) colPhone.textContent = phone;
+        const colCompany = row.querySelector('.col-contact-company');
+        if (colCompany) colCompany.textContent = company || '—';
+      }
+      closeModal('modal-edit-contact');
+      const alertBox = document.getElementById('detail-alert');
+      if (alertBox) {
+        alertBox.className = 'alert alert-success';
+        alertBox.textContent = 'Contact details updated successfully.';
+        alertBox.style.display = 'block';
+      }
+      setButtonLoading(btn, false);
     } else {
       errBox.textContent = result.error?.message || result.detail || 'Failed to update contact.';
       errBox.style.display = 'block';
@@ -640,7 +676,21 @@ async function retryContact(contactId, btn) {
     });
     const result = await res.json();
     if (res.ok && result.success) {
-      window.location.reload();
+      const row = document.getElementById(`campaign-contact-row-${contactId}`);
+      if (row) {
+        const statusCol = row.querySelector('.col-contact-status');
+        if (statusCol) {
+          statusCol.innerHTML = '<span class="status-pill status-retry_pending">RETRY_PENDING</span>';
+        }
+        const reasonCol = row.querySelector('.col-contact-reason');
+        if (reasonCol) {
+          reasonCol.textContent = 'Retry scheduled';
+        }
+      }
+      if (btn) btn.remove();
+      alertBox.className = 'alert alert-success';
+      alertBox.textContent = 'Contact scheduled for retry.';
+      alertBox.style.display = 'block';
     } else {
       alertBox.className = 'alert alert-danger';
       alertBox.textContent = result.error?.message || result.detail || 'Failed to retry contact.';
@@ -668,7 +718,14 @@ async function removeContact(contactId, btn) {
     });
     const result = await res.json();
     if (res.ok && result.success) {
-      window.location.reload();
+      const row = document.getElementById(`campaign-contact-row-${contactId}`);
+      if (row) {
+        row.remove();
+      }
+      alertBox.className = 'alert alert-success';
+      alertBox.textContent = 'Contact removed from campaign successfully.';
+      alertBox.style.display = 'block';
+      if (btn) setButtonLoading(btn, false);
     } else {
       alertBox.className = 'alert alert-danger';
       alertBox.textContent = result.error?.message || result.detail || 'Failed to remove contact.';

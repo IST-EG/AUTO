@@ -130,15 +130,16 @@ def test_production_runner_emergency_stop_pauses_claims(db_session, tmp_path):
     provider = MockMessageProvider(default_success=True)
     runner = ProductionRunner(db=db_session, campaign_id=camp.id, provider=provider, poll_interval=0.05, lock_file=lock_file)
 
-    exit_code = runner.start(max_iterations=1)
-    assert exit_code == ExitCode.SUCCESS
+    try:
+        exit_code = runner.start(max_iterations=1)
+        assert exit_code == ExitCode.EMERGENCY_STOP_ACTIVE
 
-    # Message must NOT have been sent!
-    db_session.refresh(msg)
-    assert msg.status == QueueState.QUEUED
-    assert len(provider.sent_messages) == 0
-
-    e_stop.resume("Test resumed")
+        # Message must NOT have been sent!
+        db_session.refresh(msg)
+        assert msg.status == QueueState.QUEUED
+        assert len(provider.sent_messages) == 0
+    finally:
+        e_stop.resume("Test resumed")
 
 
 def test_production_runner_circuit_breaker_pause(db_session, tmp_path):
