@@ -222,6 +222,7 @@ def test_dashboard_snapshot_alerts_runner_and_cb(web_session):
         assert "ALERT_RUNNER_HEARTBEAT_STALE" in alert_ids
 
     # Test 2: DEGRADED runner
+    DashboardService.invalidate_cache()
     mock_runner["state"] = "DEGRADED"
     mock_runner["heartbeat_age_seconds"] = 40.0
     with patch("app.services.analytics_service.AnalyticsService.get_queue_analytics", return_value=mock_q), \
@@ -233,6 +234,7 @@ def test_dashboard_snapshot_alerts_runner_and_cb(web_session):
         assert "ALERT_RUNNER_HEARTBEAT_LAGGING" in alert_ids
 
     # Test 3: STALE_LOCK_DETECTED
+    DashboardService.invalidate_cache()
     mock_runner["state"] = "STALE_LOCK_DETECTED"
     with patch("app.services.analytics_service.AnalyticsService.get_queue_analytics", return_value=mock_q), \
          patch("app.web.services.runner_control_service.RunnerControlService.get_status", return_value=mock_runner):

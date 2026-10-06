@@ -43,12 +43,15 @@ def web_session(web_engine):
 
 @pytest.fixture(autouse=True)
 def reset_login_tracker():
-    """Resets brute force attempt state before each test."""
+    """Resets brute force attempt state and dashboard cache before each test."""
     with login_tracker._lock:
         login_tracker._records.clear()
+    from app.web.services.dashboard_service import DashboardService
+    DashboardService.invalidate_cache()
     yield
     with login_tracker._lock:
         login_tracker._records.clear()
+    DashboardService.invalidate_cache()
 
 
 @pytest.fixture
