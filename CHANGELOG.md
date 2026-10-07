@@ -2,6 +2,28 @@
 
 All notable changes to this project are documented in this file.
 
+## [Phase 9.1] - 2026-10-06 — IMPLEMENTED & VERIFIED
+### Added
+- **ERP Application Kernel (`app/kernel`)**:
+  - `TenantContext`: ContextVar-based request- and task-scoped tenant identity tracking.
+  - Context isolation across concurrent OS threads and asyncio tasks.
+  - Fail-safe access (`require()` / `get_current_tenant_id()`) with `MissingTenantContextError`.
+  - Scoping context manager `TenantContext.scope()` and decorator `@TenantContext.with_context()`.
+  - Canonical System Tenant (`00000000-0000-0000-0000-000000000001`) for daemon and worker operations.
+  - `DomainEvent` base class with automatic `TenantContext` capture and serialization.
+  - `EventBus`: In-process pub/sub event dispatcher with deterministic priority ordering, sync and async handler support, and aggregate `EventDispatchError` reporting.
+  - 21 unit tests in `tests/test_kernel_tenant_context.py` and `tests/test_kernel_event_bus.py` (100% pass).
+  - Preserved 100% backward compatibility with all existing domain models, services, routes, and tests (82/82 tests pass).
+  - Zero database migrations; zero external message brokers.
+
+## [Phase 8] - 2026-10-05 — IMPLEMENTED & APPROVED
+### Added
+- **ERP Performance Architecture Remediation**:
+  - Applied partial composite index `idx_messages_queue_claim_pg` on Supabase PostgreSQL.
+  - Implemented single-statement `FOR UPDATE SKIP LOCKED` atomic queue claiming.
+  - Co-located Vercel Serverless Function compute in Dublin (`dub1`) with Supabase (`eu-west-1`), reducing database readiness latency from 1,086 ms to 284 ms (-73.8%).
+  - Batched `app_settings` queries, throttled session `last_active_at` writes to 300s, and eliminated N+1 campaign analytics queries.
+
 ## [Phase 7.7-B] - 2026-09-22 — IMPLEMENTED & VERIFIED
 ### Added
 - **Native Google Chrome for Testing ARM64 Integration into Production Architecture**:

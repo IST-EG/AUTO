@@ -14,8 +14,17 @@
 - **Production Deployment Checkpoint: Vercel + Supabase + Dedicated Worker VPS** — **IMPLEMENTED & APPROVED**
 - **Phase 7.5: Analytics & Reporting Control Center** — **IMPLEMENTED & APPROVED**
 - **Phase 7.6: WhatsApp Operations & Session Control Center** — **IMPLEMENTED & APPROVED**
-- **Phase 7.7: Oracle A1 Browser POC & Configuration Plumbing** — **IMPLEMENTED & APPROVED**
-- **Phase 7.7-B: Native Google Chrome for Testing ARM64 Integration** — **IMPLEMENTED & VERIFIED — READY FOR COMMIT**
+- **Phase 7.7-B: Native Google Chrome for Testing ARM64 Integration** — **IMPLEMENTED & VERIFIED — APPROVED**
+- **Phase 8: ERP Performance Architecture Remediation (Steps A–D)** — **IMPLEMENTED & APPROVED**
+  - Database Readiness p50 reduced from 1,086 ms to 284 ms (-73.8%).
+  - Vercel Serverless Function compute co-located in Dublin (`dub1`) with Supabase (`eu-west-1`).
+  - Atomic `FOR UPDATE SKIP LOCKED` claiming via PostgreSQL index `idx_messages_queue_claim_pg`.
+  - AppSettings batched, N+1 analytics eliminated, session writes throttled.
+- **Phase 9.1: Modular ERP Kernel, Tenant Context & In-Process Event Bus** — **IMPLEMENTED & VERIFIED**
+  - `TenantContext` abstraction with `contextvars` scoping for thread/async task isolation.
+  - In-process `EventBus` with deterministic priority ordering, error aggregation, and `DomainEvent` base.
+  - Zero database migrations in Stage 9.1; zero external message brokers.
+  - 82/82 automated tests passing cleanly (61 regression + 21 kernel tests).
 
 ---
 
@@ -648,3 +657,58 @@ The system is strictly provider-agnostic. All browser and WhatsApp Web automatio
 
 
 
+
+
+---
+
+## 11. Phase 8: ERP Performance Architecture Remediation (IMPLEMENTED & APPROVED)
+
+### Production Optimization & Co-Location:
+1. **Database Query Latency Reduction**:
+   - `/api/v1/health/ready` p50 reduced from **1,086.22 ms down to 284.35 ms (-73.8%)**.
+   - Intra-datacenter DB query transit reduced to **$< 1.5\text{ ms}$**.
+2. **Vercel Regional Co-Location**:
+   - Serverless Function compute co-located in Dublin, Ireland (`dub1`) alongside Supabase PostgreSQL (`eu-west-1`).
+   - Response headers confirm: `X-Vercel-Id: fra1::dub1::...`.
+3. **Database Indexing & Atomic Queue Claiming**:
+   - Applied partial composite index `idx_messages_queue_claim_pg` on Supabase PostgreSQL (`status, next_retry_at ASC NULLS LAST, id ASC WHERE status IN ('QUEUED', 'RETRY_PENDING')`).
+   - Implemented single-statement `FOR UPDATE SKIP LOCKED` claim in `PersistentQueueService.claim_next_message` (with SQLite fallback for tests).
+4. **Application Caching & Write Throttling**:
+   - Batched 16 `app_settings` queries into a single query with TTL in-memory cache.
+   - Throttled session `last_active_at` updates to once per 300 seconds on GET requests.
+   - Replaced N+1 per-campaign queries in `AnalyticsService` with set-based aggregations.
+
+---
+
+## 12. Phase 9.1: Modular ERP Kernel, Tenant Context & Event Bus (IMPLEMENTED & VERIFIED)
+
+### Core Architectural Invariants:
+1. **ERP Kernel Purity (`app/kernel/`) — IMPLEMENTED**:
+   - Zero project dependencies; relies solely on Python standard library (`typing`, `contextvars`, `datetime`, `uuid`, `logging`).
+   - Zero database ORM model imports; Level 0 leaf in the dependency hierarchy.
+
+2. **Tenant Context Abstraction (`TenantContext`) — IMPLEMENTED**:
+   - `contextvars.ContextVar`-based request- and task-scoped tenant tracking.
+   - Strict isolation across concurrent OS threads and `asyncio` tasks without global mutable state.
+   - Fail-safe semantics raising `MissingTenantContextError` when required but unbound.
+   - Context manager `TenantContext.scope(ctx)` and decorator `@TenantContext.with_context(ctx)` guaranteeing token restoration even on exceptions.
+   - Canonical System Tenant (`00000000-0000-0000-0000-000000000001`) for daemon, worker, and preflight background execution.
+
+3. **In-Process Domain Event Bus (`EventBus`) — IMPLEMENTED**:
+   - Zero external brokers (no Redis, Kafka, RabbitMQ, Celery).
+   - Typed `DomainEvent` base class that automatically inherits the active `TenantContext.tenant_id`.
+   - Deterministic execution in order of integer priority (lower integer = earlier execution).
+   - Structured `EventDispatchResult` with exception isolation across handlers and aggregate `EventDispatchError` reporting (zero silent error swallowing).
+   - Dual execution support for both synchronous `publish()` and asynchronous `publish_async()` calls.
+
+4. **Status Distinction (IMPLEMENTED vs PLANNED)**:
+   - **IMPLEMENTED in Stage 9.1**:
+     - Kernel package `app/kernel/` (`tenant_context.py`, `events.py`, `event_bus.py`).
+     - Unit tests in `tests/test_kernel_tenant_context.py` and `tests/test_kernel_event_bus.py` (21 tests, 100% pass).
+     - Full regression suite verified (82/82 tests pass).
+     - Zero database schema modifications; zero migrations applied.
+   - **PLANNED for Later Stages (DO NOT IMPLEMENT YET)**:
+     - `tenant_id` database columns on tables (Planned Phase 9.3).
+     - Alembic migrations for multi-tenancy schema partitioning (Planned Phase 9.3).
+     - Full domain module directory refactoring into `app/modules/*` (Planned Phase 9.2).
+     - ERP domain modules: Sales, Inventory, Accounting (Planned Phase 9.4).
